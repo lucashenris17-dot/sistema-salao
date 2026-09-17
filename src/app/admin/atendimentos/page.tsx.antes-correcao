@@ -19,7 +19,7 @@ export interface AtendimentoListItem {
   duracao_trabalhada_seg?: number;
   pausado_desde?: string | null;
   cliente?: { nome: string; sobrenome: string };
-  procedimentos?: { nome: string; duracao_estimada_min?: number };
+  procedimento?: { nome: string; duracao_estimada_min?: number };
 }
 
 export default function AtendimentosPage() {
@@ -172,10 +172,10 @@ export default function AtendimentosPage() {
         horario_agendado: d.horario_agendado,
         ordem_fila: d.ordem_fila,
         token_acesso: d.token_acesso,
-        procedimento: d.procedimentos
+        procedimento: d.procedimento
           ? {
               duracao_estimada_min:
-                d.procedimentos.duracao_estimada_min || 0,
+                d.procedimento.duracao_estimada_min || 0,
             }
           : undefined,
         duracao_trabalhada_seg: d.duracao_trabalhada_seg || 0,
@@ -480,22 +480,6 @@ export default function AtendimentosPage() {
     }
   }
 
-  async function handleCopiarLink(at: AtendimentoListItem) {
-    if (!at.token_acesso) {
-      setError('Este atendimento não possui link de acompanhamento');
-      return;
-    }
-
-    try {
-      const link = `${window.location.origin}/acompanhar/${at.token_acesso}`;
-      await navigator.clipboard.writeText(link);
-      setCopiadoId(at.id);
-      setTimeout(() => setCopiadoId(null), 2000);
-      setError(null);
-    } catch (err) {
-      setError('Não foi possível copiar o link');
-    }
-  }
   async function handleLogout() {
     await supabase.auth.signOut();
     router.push('/login');
@@ -557,9 +541,6 @@ export default function AtendimentosPage() {
         };
 
         if (formData.modo === 'agendamento') {
-          // Salva como horário de Brasília (UTC-3) interpretado corretamente.
-          // O datetime-local entrega "YYYY-MM-DDTHH:MM" sem timezone;
-          // tratamos como horário local de Brasília.
           payload.horario_agendado = formData.horario_agendado;
           payload.ordem_fila = null;
         } else {
@@ -586,19 +567,7 @@ export default function AtendimentosPage() {
         };
 
         if (formData.modo === 'agendamento') {
-          // Converter datetime-local (sem timezone) para UTC assumindo Brasília (UTC-3)
-          const dt = formData.horario_agendado; // "YYYY-MM-DDTHH:MM"
-          if (dt) {
-            // Criar Date interpretando como horário local de Brasília
-            const [datePart, timePart] = dt.split('T');
-            const [y, m, d] = datePart.split('-').map(Number);
-            const [hh, mm] = timePart.split(':').map(Number);
-            // Date em UTC com horário de Brasília (UTC-3)
-            const brTime = new Date(Date.UTC(y, m - 1, d, hh, mm, 0) + 3 * 3600 * 1000);
-            payload.horario_agendado = brTime.toISOString().slice(0, 16); // YYYY-MM-DDTHH:MM:SS.000Z → YYYY-MM-DDTHH:MM
-          } else {
-            payload.horario_agendado = null;
-          }
+          payload.horario_agendado = formData.horario_agendado;
           payload.ordem_fila = null;
         } else {
           payload.ordem_fila = formData.ordem_fila;
@@ -653,10 +622,8 @@ export default function AtendimentosPage() {
       cliente_id: at.cliente_id,
       procedimento_id: at.procedimento_id,
       modo: at.modo,
-      // O horário no banco está em UTC (já convertido ao salvar)
-      // Para exibir no datetime-local, mantemos o formato ISO sem timezone
       horario_agendado: at.horario_agendado
-        ? at.horario_agendado.slice(0, 16) // YYYY-MM-DDTHH:MM
+        ? at.horario_agendado.slice(0, 16)
         : '',
       ordem_fila: at.ordem_fila || 1,
     });
@@ -978,7 +945,6 @@ export default function AtendimentosPage() {
                   required
                 />
               </div>
-            )}
 
             <div className="flex gap-2">
               <button
@@ -997,7 +963,6 @@ export default function AtendimentosPage() {
               </button>
             </div>
           </form>
-        )}
 
         {showCancel && (
           <div className="mb-6 p-4 bg-white border border-gray-200 rounded-lg shadow-sm">
@@ -1049,7 +1014,6 @@ export default function AtendimentosPage() {
               </button>
             </div>
           </div>
-        )}
 
         {loading ? (
           <div className="text-center py-8">
@@ -1079,7 +1043,7 @@ export default function AtendimentosPage() {
                       </h3>
 
                       <p className="text-sm text-gray-600">
-                        {at.procedimentos?.nome}
+                        {at.procedimento?.nome}
                       </p>
 
                       <div className="flex items-center gap-2 mt-1 flex-wrap">
@@ -1108,7 +1072,6 @@ export default function AtendimentosPage() {
                     <span className="text-xs text-gray-400">
                       {new Date(at.criado_em).toLocaleString(
                         'pt-BR'
-                      )}
                     </span>
                   </div>
 
@@ -1120,13 +1083,11 @@ export default function AtendimentosPage() {
                           at.horario_agendado
                         ).toLocaleString('pt-BR')}
                       </p>
-                    )}
 
                   {at.modo === 'fila' && at.ordem_fila && (
                     <p className="text-xs text-gray-500 mb-1">
                       Ordem: {at.ordem_fila}
                     </p>
-                  )}
 
                   {previsao?.inicio_previsto && (
                     <p className="text-xs text-blue-600 mb-1">
@@ -1135,7 +1096,6 @@ export default function AtendimentosPage() {
                         previsao.inicio_previsto
                       ).toLocaleString('pt-BR')}
                     </p>
-                  )}
 
                   {previsao?.fim_previsto && (
                     <p className="text-xs text-blue-600 mb-1">
@@ -1144,7 +1104,6 @@ export default function AtendimentosPage() {
                         previsao.fim_previsto
                       ).toLocaleString('pt-BR')}
                     </p>
-                  )}
 
                   {previsao?.minutos_restantes != null &&
                     previsao.minutos_restantes > 0 && (
@@ -1152,14 +1111,12 @@ export default function AtendimentosPage() {
                         Restantes:{' '}
                         {previsao.minutos_restantes} min
                       </p>
-                    )}
 
                   {at.status === 'cancelado' &&
                     at.motivo_cancelamento && (
                       <p className="text-xs text-red-600 mb-1">
                         Motivo: {at.motivo_cancelamento}
                       </p>
-                    )}
 
                   {at.status === 'aguardando' && (
                     <div className="flex flex-wrap gap-2 mt-3">
@@ -1182,7 +1139,6 @@ export default function AtendimentosPage() {
                         Cancelar
                       </button>
                     </div>
-                  )}
 
                   {at.status === 'em_andamento' && (
                     <div className="flex flex-wrap gap-2 mt-3">
@@ -1205,7 +1161,6 @@ export default function AtendimentosPage() {
                         Cancelar
                       </button>
                     </div>
-                  )}
 
                   {at.status === 'pausado' && (
                     <div className="flex flex-wrap gap-2 mt-3">
@@ -1228,7 +1183,6 @@ export default function AtendimentosPage() {
                         Cancelar
                       </button>
                     </div>
-                  )}
 
                   {at.token_acesso && (
                     <button
@@ -1237,12 +1191,9 @@ export default function AtendimentosPage() {
                     >
                       {copiadoId === at.id ? 'Link copiado!' : 'Copiar link do cliente'}
                     </button>
-                  )}
                 </div>
               );
             })}
-          </div>
-        )}
 
       {showCancel && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
@@ -1270,15 +1221,6 @@ export default function AtendimentosPage() {
             </div>
           </div>
         </div>
-      )}
     </div>
-  </div>
   );
 }
-
-
-
-
-
-
-

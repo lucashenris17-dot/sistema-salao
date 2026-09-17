@@ -157,13 +157,18 @@ export default function AcompanharPage({ params }: { params: Promise<{ token: st
   const isNoShow = atendimento.status === 'no_show';
   const isEncerrado = isFinalizado || isCancelado || isNoShow;
 
-  const formatarData = (data: string) => {
-    return new Date(data).toLocaleString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+  const formatarData = (data: string | Date) => {
+    // Garante que esteja interpretado como UTC (timestamptz do Supabase)
+    // e formata para horário do salão (UTC-3) sem conversão automática do navegador
+    const d = typeof data === 'string' ? new Date(data) : data;
+    if (isNaN(d.getTime())) return '--';
+    // Ajusta para UTC-3 (Brasília) subtraindo 3h do UTC
+    const dBrasilia = new Date(d.getTime() - 3 * 3600 * 1000);
+    const dia = String(dBrasilia.getUTCDate()).padStart(2, '0');
+    const mes = String(dBrasilia.getUTCMonth() + 1).padStart(2, '0');
+    const hora = String(dBrasilia.getUTCHours()).padStart(2, '0');
+    const min = String(dBrasilia.getUTCMinutes()).padStart(2, '0');
+    return `${dia}/${mes} ${hora}:${min}`;
   };
 
   return (
@@ -220,13 +225,13 @@ export default function AcompanharPage({ params }: { params: Promise<{ token: st
                 {previsao.inicio_previsto && (
                   <div>
                     <p className="text-xs text-zinc-400">Início</p>
-                    <p className="text-sm font-medium text-zinc-800 mt-0.5">{formatarData(previsao.inicio_previsto.toString())}</p>
+                    <p className="text-sm font-medium text-zinc-800 mt-0.5">{formatarData(previsao.inicio_previsto)}</p>
                   </div>
                 )}
                 {previsao.fim_previsto && (
                   <div>
                     <p className="text-xs text-zinc-400">Fim</p>
-                    <p className="text-sm font-medium text-zinc-800 mt-0.5">{formatarData(previsao.fim_previsto.toString())}</p>
+                    <p className="text-sm font-medium text-zinc-800 mt-0.5">{formatarData(previsao.fim_previsto)}</p>
                   </div>
                 )}
               </div>
