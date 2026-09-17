@@ -12,15 +12,14 @@
  */
 
 /**
- * Converte string de data/hora (formato ISO) para Date.
+ * Converte string de data/hora (formato ISO) para Date em horário de Brasília.
  *
- * O banco Supabase armazena como timestamptz em UTC.
- * Quando o Supabase retorna um timestamp com 'Z', ele está em UTC.
- * O new Date() do JavaScript já converte UTC para o horário local do sistema.
+ * - Strings com 'Z' no final são tratadas como UTC e convertidas para Brasília (UTC-3).
+ * - Strings sem 'Z' são tratadas como horário local (já em Brasília).
  *
- * IMPORTANTE: O salvamento do agendamento já converte o horário local
- * para UTC antes de salvar no banco. Portanto, ao ler de volta,
- * o new Date(isoString) retorna o horário correto no fuso local.
+ * O banco Supabase armazena como timestamptz em UTC com 'Z'.
+ * Quando o frontend salva, converte para UTC antes de salvar.
+ * Ao ler de volta, verificamos se tem 'Z' para fazer a conversão correta.
  */
 function parseBrasiliaDateTime(isoString: string | null | undefined): Date | null {
   if (!isoString) return null;
@@ -28,10 +27,12 @@ function parseBrasiliaDateTime(isoString: string | null | undefined): Date | nul
   const d = new Date(isoString);
   if (isNaN(d.getTime())) return null;
 
-  // Não subtrair horas - o new Date() já faz a conversão correta
-  // Se o agendamento foi salvo como 10:01 horário local,
-  // o banco armazena 13:01 UTC (assumindo UTC-3)
-  // Ao ler de volta, new Date("13:01Z") retorna 10:01 no fuso local
+  // Se termina com 'Z', é UTC - converter para Brasília (UTC-3)
+  if (isoString.endsWith('Z')) {
+    d.setTime(d.getTime() - 3 * 3600 * 1000);
+  }
+
+  // Strings sem 'Z' são tratadas como horário local automaticamente
   return d;
 }
 
@@ -149,6 +150,10 @@ export function calcularPrevisao(
    * para efeito da previsão.
    *
    * Se estiver pausado, também consideramos sua retomada.
+   *
+   * IMPORTANTE: apenas atendimentos com horário futuro ou
+   * que não possuem horário fixo (fila) devem ocupar o cursor.
+   * Agendamentos que já passaram não devem mover o cursor.
    */
 
   const emAndamento = ativos
@@ -179,6 +184,8 @@ export function calcularPrevisao(
       return aPausado - bPausado;
     });
 
+  // Cursor e horario_agendado devem ser comparados no mesmo padrão de timestamp
+  // Agora é o momento atual; cursor inicia no mesmo padrão absoluto
   let cursor = new Date(agora.getTime());
 
   /*
@@ -229,6 +236,14 @@ export function calcularPrevisao(
   }
 
   /*
+   * Agora o cursor está posicionado após todos os atendimentos
+   * em andamento e pausados.
+   *
+   * Se o cursor passou de um agendamento futuro, esse agendamento
+   * está atrasado e será tratado adiante.
+   */
+
+  /*
    * ============================================================
    * 2. AGENDAMENTOS FUTUROS
    * ============================================================
@@ -254,6 +269,12 @@ export function calcularPrevisao(
     .filter((a) => a.modo === "agendamento")
     .sort(ordenarAgendamentos);
 
+  /*
+   * Agendamentos que já passaram (horario_agendado < agora) e estão
+   * aguardando não devem ser tratados como reserva de horário futuro.
+   * Eles entram na fila normal a partir do cursor atual.
+   * Somente agendamentos com horário futuro reservam uma posição.
+   */
   const agendamentosPendentes = agendamentos.filter(
     (a) => !resultados[a.id]
   );
@@ -311,26 +332,26 @@ export function calcularPrevisao(
     }
 
     /*
-     * Se o horário agendado já passou, não mostramos o
-     * atendimento no passado.
-     *
-     * Ele começa no primeiro momento disponível.
+     * Se o horário agendado já passou, mesmo assim usamos
+     * o horário agendado como início (não transformamos em fila).
+     * O atendimento atrasado será shown no horário que foi agendado.
      */
     if (horarioAgendado.getTime() <= cursor.getTime()) {
-      const restante = minutosRestantes(agendamento);
-
-      const inicio = new Date(cursor.getTime());
-      const fim = new Date(
-        inicio.getTime() + restante * 60000
+      /* Mesmo atrasado, usa o horário agendado */
+      const inicioAgendamento = new Date(horarioAgendado.getTime());
+      const restanteAgendamento = minutosRestantes(agendamento);
+      const fimAgendamento = new Date(
+        inicioAgendamento.getTime() + restanteAgendamento * 60000
       );
 
       resultados[agendamento.id] = {
-        inicio_previsto: inicio,
-        fim_previsto: fim,
-        minutos_restantes: restante,
+        inicio_previsto: inicioAgendamento,
+        fim_previsto: fimAgendamento,
+        minutos_restantes: restanteAgendamento,
       };
 
-      cursor = fim;
+      /* Cursor avança para depois do atendimento */
+      cursor = fimAgendamento;
       continue;
     }
 
@@ -374,12 +395,12 @@ export function calcularPrevisao(
     /*
      * Agora colocamos o agendamento no horário reservado,
      * desde que o profissional esteja livre até lá.
+     *
+     * Para agendamento futuro: usa o horario_agendado como início,
+     * não o cursor atual.
      */
     const inicioAgendamento = new Date(
-      Math.max(
-        cursor.getTime(),
-        horarioAgendado.getTime()
-      )
+      horarioAgendado.getTime()  // Agendamento usa sempre o horário agendado
     );
 
     const restanteAgendamento =
