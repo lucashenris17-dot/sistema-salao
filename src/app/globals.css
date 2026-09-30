@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
 :root {
+  color-scheme: only light;
   --background: #ffffff;
   --foreground: #171717;
 }
@@ -12,15 +13,64 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+@layer base {
+  input,
+  select,
+  textarea {
+    color: #111827;
+    background-color: #ffffff;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: #6b7280;
+    opacity: 1;
+  }
+}
+
+input:is([type="date"], [type="time"], [type="datetime-local"]) {
+  color-scheme: only light;
+  color: #111827 !important;
+  background-color: #ffffff !important;
+  -webkit-text-fill-color: #111827 !important;
+}
+
+/* O controle móvel exibe o valor em uma parte diferente dos campos do desktop. */
+input:is([type="date"], [type="time"], [type="datetime-local"])::-webkit-date-and-time-value {
+  color: #111827 !important;
+  -webkit-text-fill-color: #111827 !important;
+  opacity: 1;
+  min-height: 1.5em;
+  text-align: left;
+}
+
+input:is([type="date"], [type="time"], [type="datetime-local"])::-webkit-datetime-edit,
+input:is([type="date"], [type="time"], [type="datetime-local"])::-webkit-datetime-edit-text,
+input:is([type="date"], [type="time"], [type="datetime-local"])::-webkit-datetime-edit-month-field,
+input:is([type="date"], [type="time"], [type="datetime-local"])::-webkit-datetime-edit-day-field,
+input:is([type="date"], [type="time"], [type="datetime-local"])::-webkit-datetime-edit-year-field,
+input:is([type="date"], [type="time"], [type="datetime-local"])::-webkit-datetime-edit-hour-field,
+input:is([type="date"], [type="time"], [type="datetime-local"])::-webkit-datetime-edit-minute-field {
+  color: #111827 !important;
+  -webkit-text-fill-color: #111827 !important;
+  opacity: 1;
+}
+
+/* Os navegadores usam nomes diferentes para o período AM/PM. */
+input:is([type="date"], [type="time"], [type="datetime-local"])::-webkit-datetime-edit-ampm-field {
+  color: #111827 !important;
+  -webkit-text-fill-color: #111827 !important;
+  opacity: 1;
+}
+
+input:is([type="date"], [type="time"], [type="datetime-local"])::-webkit-datetime-edit-meridiem-field {
+  color: #111827 !important;
+  -webkit-text-fill-color: #111827 !important;
+  opacity: 1;
 }

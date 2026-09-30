@@ -4,6 +4,11 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
 import { calcularPrevisao } from '@/lib/previsao';
+import ProximoAtendimento from './proximo-atendimento';
+
+function gerarToken() {
+  return Math.random().toString(36).substring(2) + Date.now().toString(36);
+}
 
 export interface AtendimentoListItem {
   id: string;
@@ -18,7 +23,11 @@ export interface AtendimentoListItem {
   criado_em: string;
   duracao_trabalhada_seg?: number;
   pausado_desde?: string | null;
-  cliente?: { nome: string; sobrenome: string };
+  clientes?: {
+  nome: string;
+  sobrenome: string;
+  whatsapp: string;
+};
   procedimentos?: { nome: string; duracao_estimada_min?: number };
 }
 
@@ -49,9 +58,11 @@ export default function AtendimentosPage() {
     cliente_id: '',
     procedimento_id: '',
     modo: 'agendamento' as 'agendamento' | 'fila',
-    horario_agendado: '',
     ordem_fila: 1,
   });
+  const [dataAgendamento, setDataAgendamento] = useState('');
+  const [horaAgendamento, setHoraAgendamento] = useState('');
+
 
   const [cancelForm, setCancelForm] = useState({
     id: '',
@@ -139,6 +150,7 @@ export default function AtendimentosPage() {
           procedimento_id,
           modo,
           status,
+          status_confirmacao,
           horario_agendado,
           ordem_fila,
           motivo_cancelamento,
@@ -146,15 +158,17 @@ export default function AtendimentosPage() {
           criado_em,
           duracao_trabalhada_seg,
           pausado_desde,
-          clientes:cliente_id (
+          clientes!cliente_id (
             nome,
-            sobrenome
+            sobrenome,
+            whatsapp
           ),
-          procedimentos:procedimento_id (
+          procedimentos!procedimento_id (
             nome,
             duracao_estimada_min
           )
         `)
+        .eq('status_confirmacao', 'confirmado')
         .order('criado_em', { ascending: false });
 
       if (err) throw err;
@@ -203,7 +217,7 @@ export default function AtendimentosPage() {
         status,
         duracao_trabalhada_seg,
         procedimento_id,
-        procedimentos:procedimento_id (
+        procedimentos!procedimento_id (
           duracao_estimada_min
         )
       `)
@@ -250,6 +264,13 @@ export default function AtendimentosPage() {
         .eq('status', 'aguardando');
 
       if (updateError) throw updateError;
+      await supabase
+  .channel('atendimento-atualizado')
+  .send({
+    type: 'broadcast',
+    event: 'atendimento-atualizado',
+    payload: { id },
+  });
 
       const { error: segmentError } = await supabase
         .from('segmentos_atendimento')
@@ -479,23 +500,79 @@ export default function AtendimentosPage() {
       setProcessingId(null);
     }
   }
-
-  async function handleCopiarLink(at: AtendimentoListItem) {
-    if (!at.token_acesso) {
-      setError('Este atendimento não possui link de acompanhamento');
-      return;
-    }
-
-    try {
-      const link = `${window.location.origin}/acompanhar/${at.token_acesso}`;
-      await navigator.clipboard.writeText(link);
-      setCopiadoId(at.id);
-      setTimeout(() => setCopiadoId(null), 2000);
-      setError(null);
-    } catch (err) {
-      setError('Não foi possível copiar o link');
-    }
+async function handleCopiarLink(at: AtendimentoListItem) {
+  if (!at.token_acesso) {
+    setError('Este atendimento não possui link de acompanhamento');
+    return;
   }
+
+  try {
+    const link = `${window.location.origin}/acompanhar/${at.token_acesso}`;
+
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(link);
+    } else {
+      const textarea = document.createElement('textarea');
+      textarea.value = link;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+
+      document.execCommand('copy');
+
+      document.body.removeChild(textarea);
+    }
+
+    setCopiadoId(at.id);
+    setTimeout(() => setCopiadoId(null), 2000);
+    setError(null);
+
+  } catch (err) {
+    setError('Não foi possível copiar o link');
+  }
+}
+async function handleEnviarWhatsApp(at: AtendimentoListItem) {
+  const whatsapp = at.clientes?.whatsapp;
+
+  if (!whatsapp) {
+    setError('Cliente não possui WhatsApp cadastrado');
+    return;
+  }
+
+  const numero = whatsapp.replace(/\D/g, '');
+
+  const data = at.horario_agendado
+  ? new Date(at.horario_agendado).toLocaleDateString('pt-BR')
+  : '';
+
+const horario = at.horario_agendado
+  ? new Date(at.horario_agendado).toLocaleTimeString('pt-BR', {
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  : '';
+
+const link = `${window.location.origin}/acompanhar/${at.token_acesso}`;
+
+const mensagem = encodeURIComponent(
+  `Olá ${at.clientes?.nome}! Tudo bem?\n\n` +
+  `Seu atendimento no *Salão da Inacia* está confirmado.\n\n` +
+  `Procedimento: ${at.procedimentos?.nome}\n` +
+  `Data: ${data}\n` +
+  `Horário: ${horario}\n\n` +
+  `Você pode acompanhar seu atendimento por este link:\n` +
+  `${link}\n\n` +
+  `Qualquer dúvida estamos à disposição.`
+);
+
+  window.open(
+    `https://wa.me/55${numero}?text=${mensagem}`,
+    '_blank'
+  );
+}
   async function handleLogout() {
     await supabase.auth.signOut();
     router.push('/login');
@@ -520,9 +597,9 @@ export default function AtendimentosPage() {
 
     if (
       formData.modo === 'agendamento' &&
-      !formData.horario_agendado
+      (!dataAgendamento || !horaAgendamento)
     ) {
-      setError('Informe o horário do agendamento.');
+      setError('Informe a data e o horário do agendamento.');
       return;
     }
 
@@ -535,6 +612,11 @@ export default function AtendimentosPage() {
     }
 
     try {
+      // Os dois campos representam o horário do salão, em Brasília (UTC-3).
+      const horarioAgendado = formData.modo === 'agendamento'
+        ? new Date(`${dataAgendamento}T${horaAgendamento}:00-03:00`).toISOString()
+        : null;
+
       if (editingId) {
         const atendimentoAtual = atendimentos.find(
           (at) => at.id === editingId
@@ -557,10 +639,7 @@ export default function AtendimentosPage() {
         };
 
         if (formData.modo === 'agendamento') {
-          // Salva como horário de Brasília (UTC-3) interpretado corretamente.
-          // O datetime-local entrega "YYYY-MM-DDTHH:MM" sem timezone;
-          // tratamos como horário local de Brasília.
-          payload.horario_agendado = formData.horario_agendado;
+          payload.horario_agendado = horarioAgendado;
           payload.ordem_fila = null;
         } else {
           payload.ordem_fila = formData.ordem_fila;
@@ -582,28 +661,24 @@ export default function AtendimentosPage() {
           procedimento_id: formData.procedimento_id,
           modo: formData.modo,
           status: 'aguardando',
-          token_acesso: crypto.randomUUID(),
+         token_acesso: gerarToken(),
         };
 
         if (formData.modo === 'agendamento') {
-          // Converter datetime-local (sem timezone) para UTC assumindo Brasília (UTC-3)
-          const dt = formData.horario_agendado; // "YYYY-MM-DDTHH:MM"
-          if (dt) {
-            // Criar Date interpretando como horário local de Brasília
-            const [datePart, timePart] = dt.split('T');
-            const [y, m, d] = datePart.split('-').map(Number);
-            const [hh, mm] = timePart.split(':').map(Number);
-            // Date em UTC com horário de Brasília (UTC-3)
-            const brTime = new Date(Date.UTC(y, m - 1, d, hh, mm, 0) + 3 * 3600 * 1000);
-            payload.horario_agendado = brTime.toISOString().slice(0, 16); // YYYY-MM-DDTHH:MM:SS.000Z → YYYY-MM-DDTHH:MM
-          } else {
-            payload.horario_agendado = null;
-          }
+          payload.horario_agendado = horarioAgendado;
           payload.ordem_fila = null;
         } else {
-          payload.ordem_fila = formData.ordem_fila;
-          payload.horario_agendado = null;
-        }
+  const { data: ultimaFila } = await supabase
+    .from('atendimentos')
+    .select('ordem_fila')
+    .eq('modo', 'fila')
+    .order('ordem_fila', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  payload.ordem_fila = (ultimaFila?.ordem_fila || 0) + 1;
+  payload.horario_agendado = null;
+}
 
         const { data: inserted, error: err } = await supabase
           .from('atendimentos')
@@ -628,9 +703,10 @@ export default function AtendimentosPage() {
         cliente_id: '',
         procedimento_id: '',
         modo: 'agendamento',
-        horario_agendado: '',
         ordem_fila: 1,
       });
+      setDataAgendamento('');
+      setHoraAgendamento('');
 
       setShowForm(false);
       setError(null);
@@ -653,13 +729,25 @@ export default function AtendimentosPage() {
       cliente_id: at.cliente_id,
       procedimento_id: at.procedimento_id,
       modo: at.modo,
-      // O horário no banco está em UTC (já convertido ao salvar)
-      // Para exibir no datetime-local, mantemos o formato ISO sem timezone
-      horario_agendado: at.horario_agendado
-        ? at.horario_agendado.slice(0, 16) // YYYY-MM-DDTHH:MM
-        : '',
       ordem_fila: at.ordem_fila || 1,
     });
+
+    const horario = at.horario_agendado ? new Date(at.horario_agendado) : null;
+    if (horario && !Number.isNaN(horario.getTime())) {
+      const partes = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Sao_Paulo',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+      }).formatToParts(horario);
+      const valor = (tipo: Intl.DateTimeFormatPartTypes) =>
+        partes.find((parte) => parte.type === tipo)?.value ?? '';
+
+      setDataAgendamento(`${valor('year')}-${valor('month')}-${valor('day')}`);
+      setHoraAgendamento(`${valor('hour')}:${valor('minute')}`);
+    } else {
+      setDataAgendamento('');
+      setHoraAgendamento('');
+    }
 
     setEditingId(at.id);
     setShowForm(true);
@@ -674,9 +762,10 @@ export default function AtendimentosPage() {
       cliente_id: '',
       procedimento_id: '',
       modo: 'agendamento',
-      horario_agendado: '',
       ordem_fila: 1,
     });
+    setDataAgendamento('');
+    setHoraAgendamento('');
 
     setError(null);
   }
@@ -830,6 +919,8 @@ export default function AtendimentosPage() {
           </div>
         </div>
 
+        <ProximoAtendimento atendimentos={atendimentos} loading={loading} />
+
         {error && (
           <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
             <p className="text-red-800 text-sm">{error}</p>
@@ -858,13 +949,15 @@ export default function AtendimentosPage() {
                     cliente_id: e.target.value,
                   })
                 }
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-900"
                 required
               >
-                <option value="">Selecione...</option>
+                <option className="text-gray-900" value="">
+  Selecione...
+</option>
 
                 {clientes.map((c) => (
-                  <option key={c.id} value={c.id}>
+                  <option className="text-gray-900" key={c.id} value={c.id}>
                     {c.nome} {c.sobrenome}
                   </option>
                 ))}
@@ -888,13 +981,15 @@ export default function AtendimentosPage() {
                     procedimento_id: e.target.value,
                   })
                 }
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-900"
                 required
               >
-                <option value="">Selecione...</option>
+                <option className="text-gray-900" value="">
+  Selecione...
+</option>
 
                 {procedimentos.map((p) => (
-                  <option key={p.id} value={p.id}>
+                  <option className="text-gray-900" key={p.id} value={p.id}>
                     {p.nome}
                   </option>
                 ))}
@@ -909,50 +1004,105 @@ export default function AtendimentosPage() {
                 Modo *
               </label>
 
-              <select
-                id="modo"
-                value={formData.modo}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    modo: e.target.value as
-                      | 'agendamento'
-                      | 'fila',
-                  })
-                }
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                required
-              >
-                <option value="agendamento">Agendamento</option>
-                <option value="fila">Fila</option>
-              </select>
+  <div className="flex gap-3">
+  <button
+    type="button"
+    onClick={() =>
+      setFormData({
+        ...formData,
+        modo: 'agendamento',
+      })
+    }
+
+    className={`flex-1 py-2 rounded-lg border-2 font-semibold transition ${
+  formData.modo === 'agendamento'
+    ? 'bg-zinc-900 text-white border-zinc-900 shadow-md'
+    : 'bg-gray-100 text-gray-700 border-gray-300'
+}`}
+  >
+    Agendamento
+  </button>
+
+  <button
+    type="button"
+    onClick={() =>
+      setFormData({
+        ...formData,
+        modo: 'fila',
+      })
+    }
+    className={`flex-1 py-2 rounded-lg border-2 font-semibold transition ${
+  formData.modo === 'fila'
+    ? 'bg-zinc-900 text-white border-zinc-900 shadow-md'
+    : 'bg-gray-100 text-gray-700 border-gray-300'
+}`}
+  >
+    Fila
+  </button>
+
             </div>
 
+          </div>
             {formData.modo === 'agendamento' && (
-              <div className="mb-4">
-                <label
-                  htmlFor="horario_agendado"
-                  className="block text-sm font-medium text-gray-700 mb-1"
-                >
-                  Horário Agendado *
-                </label>
+  <div className="mb-4">
 
-                <input
-                  id="horario_agendado"
-                  type="datetime-local"
-                  value={formData.horario_agendado}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      horario_agendado: e.target.value,
-                    })
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
+    <label
+      htmlFor="data_agendamento"
+      className="block text-sm font-medium text-gray-700 mb-1"
+    >
+      Data do Atendimento *
+    </label>
 
-            )}
+    <div className="relative min-w-0">
+      <input
+        id="data_agendamento"
+        type="date"
+        autoComplete="off"
+        value={dataAgendamento}
+        onChange={(e) => setDataAgendamento(e.target.value)}
+        className="peer block box-border h-11 w-full min-w-0 max-w-full appearance-none px-3 py-2 border border-gray-300 rounded-lg bg-white text-base text-left text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        required
+      />
+      {!dataAgendamento && (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-y-2 left-3 right-10 flex items-center bg-white text-base text-gray-900 peer-focus:hidden"
+        >
+          Selecione a data
+        </span>
+      )}
+    </div>
+
+    <label
+      htmlFor="hora_agendamento"
+      className="block text-sm font-medium text-gray-700 mb-1 mt-4"
+    >
+      Horário *
+    </label>
+
+    <div className="relative min-w-0">
+      <input
+        id="hora_agendamento"
+        type="time"
+        step="300"
+        autoComplete="off"
+        value={horaAgendamento}
+        onChange={(e) => setHoraAgendamento(e.target.value)}
+        className="peer block box-border h-11 w-full min-w-0 max-w-full appearance-none px-3 py-2 border border-gray-300 rounded-lg bg-white text-base text-left text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        required
+      />
+      {!horaAgendamento && (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-y-2 left-3 right-10 flex items-center bg-white text-base text-gray-900 peer-focus:hidden"
+        >
+          Selecione o horário
+        </span>
+      )}
+    </div>
+
+  </div>
+)}
             {formData.modo === 'fila' && (
               <div className="mb-4">
                 <label
@@ -974,7 +1124,11 @@ export default function AtendimentosPage() {
                         parseInt(e.target.value, 10) || 1,
                     })
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-900"
+style={{
+  color: '#111827',
+  WebkitTextFillColor: '#111827',
+}}
                   required
                 />
               </div>
@@ -1075,10 +1229,10 @@ export default function AtendimentosPage() {
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex-1">
                       <h3 className="font-semibold text-gray-900">
-                        {at.cliente?.nome} {at.cliente?.sobrenome}
-                      </h3>
+  {at.clientes?.nome} {at.clientes?.sobrenome}
+</h3>
 
-                      <p className="text-sm text-gray-600">
+                      <p className="text-sm text-gray-900 font-medium">
                         {at.procedimentos?.nome}
                       </p>
 
@@ -1231,13 +1385,25 @@ export default function AtendimentosPage() {
                   )}
 
                   {at.token_acesso && (
-                    <button
-                      onClick={() => handleCopiarLink(at)}
-                      className="mt-3 px-3 py-1.5 border rounded-lg text-sm hover:bg-gray-50"
-                    >
-                      {copiadoId === at.id ? 'Link copiado!' : 'Copiar link do cliente'}
-                    </button>
-                  )}
+  <div className="flex gap-2 mt-3">
+    <button
+      onClick={() => {
+  console.log('CLICOU WHATS', at);
+  handleEnviarWhatsApp(at);
+}}
+      className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700"
+    >
+      WhatsApp
+    </button>
+
+    <button
+      onClick={() => handleCopiarLink(at)}
+      className="px-3 py-1.5 border rounded-lg text-sm text-zinc-900 font-medium hover:bg-gray-50"
+    >
+      {copiadoId === at.id ? 'Link copiado!' : 'Copiar link do cliente'}
+    </button>
+  </div>
+)}
                 </div>
               );
             })}

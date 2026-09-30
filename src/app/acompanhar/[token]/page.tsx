@@ -6,26 +6,28 @@ import { calcularPrevisao } from '@/lib/previsao';
 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; icon: string; mensagem: string }> = {
   aguardando: {
-    label: 'Aguardando',
-    bg: 'bg-blue-50',
-    text: 'text-blue-700',
-    icon: '🕐',
-    mensagem: 'Você está na fila de atendimento. Fique tranquilo, a previsão é atualizada em tempo real.',
-  },
-  em_andamento: {
-    label: 'Em atendimento',
-    bg: 'bg-emerald-50',
-    text: 'text-emerald-700',
-    icon: '✨',
-    mensagem: 'Seu atendimento está acontecendo agora. Aproveite!',
-  },
-  pausado: {
-    label: 'Pausado',
-    bg: 'bg-amber-50',
-    text: 'text-amber-700',
-    icon: '⏸️',
-    mensagem: 'Atendimento pausado temporariamente. Voltamos logo!',
-  },
+  label: 'Aguardando confirmação',
+  bg: 'bg-blue-50',
+  text: 'text-blue-700',
+  icon: '🕐',
+  mensagem: 'Sua solicitação foi enviada.\nA Inacia irá confirmar a disponibilidade do horário.',
+},
+
+em_andamento: {
+  label: 'Em atendimento',
+  bg: 'bg-emerald-50',
+  text: 'text-emerald-700',
+  icon: '✨',
+  mensagem: 'Seu atendimento começou. Aproveite seu momento com a Inacia.',
+},
+
+pausado: {
+  label: 'Pausado',
+  bg: 'bg-amber-50',
+  text: 'text-amber-700',
+  icon: '⏸️',
+  mensagem: 'O atendimento foi pausado temporariamente. A previsão será atualizada.',
+},
   finalizado: {
     label: 'Finalizado',
     bg: 'bg-emerald-50',
@@ -64,6 +66,7 @@ export default function AcompanharPage({ params }: { params: Promise<{ token: st
   useEffect(() => {
     async function carregar() {
       try {
+        
         const { data, error } = await supabase
           .rpc('fn_buscar_atendimento_publico', { p_token: token })
           .single();
@@ -93,21 +96,45 @@ export default function AcompanharPage({ params }: { params: Promise<{ token: st
         };
 
         setAtendimento(atendimentoData);
-        const procDur = (resposta.duracao_estimada_min != null) ? resposta.duracao_estimada_min : 0;
-        const calcInputs = [{
-          id: atendimentoData.id,
-          modo: atendimentoData.modo,
-          status: atendimentoData.status,
-          cliente_id: atendimentoData.cliente_id || '',
-          procedimento_id: atendimentoData.procedimento_id || '',
-          horario_agendado: atendimentoData.horario_agendado,
-          ordem_fila: atendimentoData.ordem_fila,
-          procedimento: { duracao_estimada_min: procDur },
-          duracao_trabalhada_seg: atendimentoData.duracao_trabalhada_seg,
-          pausado_desde: atendimentoData.pausado_desde,
-        }];
-        const preds = calcularPrevisao(calcInputs);
-        setPrevisao(preds[atendimentoData.id] || {});
+        const { data: filaData } = await supabase
+  .from('atendimentos')
+.select(`
+    id,
+    cliente_id,
+    procedimento_id,
+    modo,
+    status,
+    horario_agendado,
+    ordem_fila,
+    criado_em,
+    duracao_trabalhada_seg,
+    pausado_desde,
+    procedimentos!procedimento_id (
+      duracao_estimada_min
+    )
+  `)
+.in('status', ['aguardando', 'em_andamento', 'pausado'])
+.order('criado_em', { ascending: true });
+
+const calcInputs = (filaData || []).map((f: any) => ({
+  id: f.id,
+  modo: f.modo,
+  status: f.status,
+  cliente_id: f.cliente_id || '',
+  procedimento_id: f.procedimento_id || '',
+  horario_agendado: f.horario_agendado,
+  ordem_fila: f.ordem_fila,
+  criado_em: f.criado_em,
+  procedimento: {
+    duracao_estimada_min: f.procedimentos?.duracao_estimada_min || 0
+  },
+  duracao_trabalhada_seg: f.duracao_trabalhada_seg,
+  pausado_desde: f.pausado_desde,
+}));
+
+const preds = calcularPrevisao(calcInputs);
+
+setPrevisao(preds[atendimentoData.id] || {});
       } catch (e) {
         setErro('Erro ao carregar');
       }
@@ -115,12 +142,22 @@ export default function AcompanharPage({ params }: { params: Promise<{ token: st
     carregar();
 
     const channel = supabase
-      .channel('acompanhar-' + token)
-      .on('broadcast', { event: 'atendimento-atualizado' }, () => {
-        carregar();
-      })
-      .subscribe();
-
+  .channel('atendimento-atualizado')
+  .on(
+    'postgres_changes',
+    {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'atendimentos',
+    },
+     (payload) => {
+      
+      carregar();
+    }
+  )
+  .subscribe((status) => {
+    console.log('REALTIME STATUS:', status);
+  });  
     return () => {
       supabase.removeChannel(channel);
     };
@@ -158,17 +195,16 @@ export default function AcompanharPage({ params }: { params: Promise<{ token: st
   const isEncerrado = isFinalizado || isCancelado || isNoShow;
 
   const formatarData = (data: string | Date) => {
-    // Garante que esteja interpretado como UTC (timestamptz do Supabase)
-    // e formata para horário do salão (UTC-3) sem conversão automática do navegador
     const d = typeof data === 'string' ? new Date(data) : data;
     if (isNaN(d.getTime())) return '--';
-    // Ajusta para UTC-3 (Brasília) subtraindo 3h do UTC
-    const dBrasilia = new Date(d.getTime() - 3 * 3600 * 1000);
-    const dia = String(dBrasilia.getUTCDate()).padStart(2, '0');
-    const mes = String(dBrasilia.getUTCMonth() + 1).padStart(2, '0');
-    const hora = String(dBrasilia.getUTCHours()).padStart(2, '0');
-    const min = String(dBrasilia.getUTCMinutes()).padStart(2, '0');
-    return `${dia}/${mes} ${hora}:${min}`;
+    return d.toLocaleString('pt-BR', {
+      timeZone: 'America/Sao_Paulo',
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
   };
 
   return (
@@ -177,34 +213,43 @@ export default function AcompanharPage({ params }: { params: Promise<{ token: st
 
         {/* Cabeçalho */}
         <header className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-zinc-900 tracking-tight">Salão Elegance</h1>
+          <h1 className="text-2xl font-bold text-zinc-900 tracking-tight">
+ ✂️ Salão da Inacia
+</h1>
           <div className="w-8 h-0.5 bg-amber-400 mx-auto mt-2 rounded-full" />
-          <p className="text-xs text-zinc-400 mt-2">Acompanhamento de atendimento</p>
-        </header>
+           <p className="text-sm text-zinc-500 mt-2">
+    Seu atendimento, acompanhado em tempo real
+  </p>
+</header>
 
         {/* Card principal */}
         <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 overflow-hidden">
+        {/* Cliente e procedimento */}
+<div className="px-6 pt-6 pb-4">
 
-          {/* Nome do procedimento em destaque */}
-          <div className="px-6 pt-6 pb-4">
-            <h2 className="text-xl font-bold text-zinc-900 leading-tight">
-              {(atendimento.procedimentos as any)?.nome}
-            </h2>
-            {(atendimento.clientes as any)?.nome && (
-              <p className="text-sm font-medium text-zinc-500 mt-1 flex items-center gap-1.5">
-                <span className="w-4 h-4 text-zinc-400 bg-zinc-100 rounded-full flex items-center justify-center text-[10px]">👤</span>
-                {(atendimento.clientes as any)?.nome} {(atendimento.clientes as any)?.sobrenome}
-              </p>
-            )}
-          </div>
+  {(atendimento.clientes as any)?.nome && (
+    <p className="text-sm text-zinc-500 mb-2">
+      Olá, {(atendimento.clientes as any)?.nome} 👋
+    </p>
+  )}
 
-          {/* Status com ícone */}
-          <div className="px-6 mb-5">
-            <div className={`inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium shadow-sm ring-1 ring-inset ${statusCfg.bg} ${statusCfg.text} ring-${statusCfg.text.replace('text-', '').replace('700', '200')}/40`}>
-              <span>{statusCfg.icon}</span>
-              {statusCfg.label}
-            </div>
-          </div>
+  <h2 className="text-xl font-bold text-zinc-900 leading-tight">
+    {(atendimento.procedimentos as any)?.nome}
+  </h2>
+
+  <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wide mt-2">
+    Seu atendimento
+  </p>
+
+</div>  
+
+          {/* Status */}
+<div className="px-6 mb-5">
+  <div className={`flex items-center justify-center gap-3 px-5 py-3 rounded-2xl text-base font-bold shadow-sm ${statusCfg.bg} ${statusCfg.text}`}>
+    <span className="text-xl">{statusCfg.icon}</span>
+    <span>{statusCfg.label}</span>
+  </div>
+</div>
 
           {/* Horário agendado */}
           {atendimento.horario_agendado && (
@@ -220,45 +265,98 @@ export default function AcompanharPage({ params }: { params: Promise<{ token: st
             {statusCfg.mensagem}
           </div>
 
-          {/* Bloco Previsão — só para status ativos */}
+        {atendimento.status === 'aguardando' && atendimento.ordem_fila && !isEncerrado && (
+  <div className="mx-4 mb-5 bg-blue-50 border border-blue-200 rounded-2xl p-4 shadow-sm">
+    <div className="flex items-center gap-2 mb-2">
+      <span className="text-xl">👥</span>
+      <p className="text-xs font-bold text-blue-500 uppercase tracking-wide">
+        Sua posição na fila
+      </p>
+    </div>
+
+    <p className="text-base font-bold text-blue-800">
+      {atendimento.ordem_fila === 1
+        ? "Você é o próximo!"
+        : "Tem " +
+          (atendimento.ordem_fila - 1) +
+          " pessoa" +
+          ((atendimento.ordem_fila - 1) > 1 ? "s" : "") +
+          " na sua frente."}
+    </p>
+
+    <p className="text-xs text-blue-600 mt-2">
+      A previsão é atualizada automaticamente.
+    </p>
+  </div>
+)}
+  
+            {/* Bloco Previsão — só para status ativos */}
           {!isEncerrado && previsao.inicio_previsto && (
             <div className="bg-zinc-50 border-t border-zinc-200 p-6">
               <div className="flex items-center gap-2 mb-4">
-                <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Previsão Atualizada</span>
+                <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
+                  Previsão Atualizada
+                  </span>
                 <div className="flex-1 border-b border-zinc-200" />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                {previsao.inicio_previsto && (
-                  <div className="bg-white rounded-xl p-3 shadow-sm border border-zinc-100 relative overflow-hidden">
-                    <div className="absolute top-0 left-0 w-1 h-full bg-emerald-400"></div>
-                    <p className="text-[10px] font-semibold tracking-wide text-zinc-400 uppercase">Início previsto</p>
-                    <p className="text-sm font-bold text-zinc-900 mt-1">{formatarData(previsao.inicio_previsto)}</p>
-                  </div>
-                )}
 
-                {previsao.fim_previsto && (
-                  <div className="bg-white rounded-xl p-3 shadow-sm border border-zinc-100">
-                    <p className="text-[10px] font-semibold tracking-wide text-zinc-400 uppercase">Fim estimado</p>
-                    <p className="text-sm font-medium text-zinc-600 mt-1">{formatarData(previsao.fim_previsto)}</p>
-                  </div>
-                )}
-              </div>
+  {previsao.inicio_previsto && (
+    <div className="bg-white rounded-xl p-4 shadow-sm border border-zinc-100 relative overflow-hidden">
+      <div className="absolute top-0 left-0 w-1 h-full bg-emerald-400"></div>
 
+      <div className="flex items-center gap-2 mb-1">
+  <span className="text-lg">🏁</span>
+  <p className="text-[10px] font-semibold tracking-wide text-zinc-400 uppercase">
+    Início Previsto
+  </p>
+</div>
+
+<p className="text-base font-bold text-zinc-900 mt-1">
+  {formatarData(previsao.inicio_previsto)}
+</p>
+    </div>
+  )}
+
+  {previsao.fim_previsto && (
+    <div className="bg-white rounded-xl p-4 shadow-sm border border-zinc-100 relative overflow-hidden">
+      <div className="absolute top-0 left-0 w-1 h-full bg-blue-400"></div>
+
+      <div className="flex items-center gap-2 mb-1">
+        <span className="text-lg">⏰</span>
+        <p className="text-[10px] font-semibold tracking-wide text-zinc-400 uppercase">
+          Fim estimado
+        </p>
+      </div>
+
+      <p className="text-base font-bold text-zinc-900 mt-1">
+        {formatarData(previsao.fim_previsto)}
+      </p>
+    </div>
+  )}
+
+</div>
               {previsao.minutos_restantes != null && previsao.minutos_restantes > 0 && (
                 <div className="mt-4 bg-white rounded-xl p-4 shadow-sm border border-zinc-100 flex items-center justify-between">
                   <div>
-                    <p className="text-[10px] font-semibold tracking-wide text-zinc-400 uppercase">Tempo de duração</p>
+                    <p className="text-[10px] font-semibold tracking-wide text-zinc-400 uppercase">
+                      Tempo de duração
+                    </p>
                   </div>
+
                   <div className="text-right">
-                    <p className="text-xl font-bold text-zinc-900 tracking-tight">{previsao.minutos_restantes} <span className="text-xs font-medium text-zinc-500">min</span></p>
+                    <p className="text-xl font-bold text-zinc-900 tracking-tight">
+                      {previsao.minutos_restantes}
+                      <span className="text-xs font-medium text-zinc-500"> min</span>
+                    </p>
                   </div>
                 </div>
               )}
+
             </div>
           )}
         </div>
-
       </div>
     </div>
   );

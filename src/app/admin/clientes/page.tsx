@@ -1,4 +1,5 @@
 'use client';
+import { formatarWhatsApp, mascaraWhatsApp, validarWhatsApp } from '@/lib/types';
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -74,6 +75,11 @@ export default function ClientesPage() {
       setError('WhatsApp é obrigatório');
       return;
     }
+    const v = validarWhatsApp(formData.whatsapp);
+    if (!v.valido) {
+      setError(v.mensagem || 'WhatsApp inválido');
+      return;
+    }
 
     try {
       if (editingId) {
@@ -82,7 +88,7 @@ export default function ClientesPage() {
           .update({
             nome: formData.nome.trim(),
             sobrenome: formData.sobrenome.trim(),
-            whatsapp: formData.whatsapp.trim(),
+            whatsapp: v.limpo,
           })
           .eq('id', editingId);
 
@@ -95,7 +101,7 @@ export default function ClientesPage() {
             {
               nome: formData.nome.trim(),
               sobrenome: formData.sobrenome.trim(),
-              whatsapp: formData.whatsapp.trim(),
+              whatsapp: v.limpo,
             },
           ]);
 
@@ -216,10 +222,13 @@ export default function ClientesPage() {
               <label className="block text-sm font-medium text-gray-700 mb-1">WhatsApp *</label>
               <input
                 type="text"
-                value={formData.whatsapp}
-                onChange={(e) => setFormData({ ...formData, whatsapp: e.target.value })}
+                value={formData.whatsapp ? mascaraWhatsApp(formData.whatsapp) : ''}
+                onChange={(e) => {
+                  const limpo = e.target.value.replace(/\D/g, '').slice(0, 11);
+                  setFormData({ ...formData, whatsapp: limpo });
+                }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Ex: (11) 99999-9999"
+                placeholder="Ex: (87) 9 9845-4566"
                 required
               />
             </div>
@@ -265,7 +274,7 @@ export default function ClientesPage() {
                       {cliente.nome} {cliente.sobrenome}
                     </h3>
                     <p className="text-sm text-gray-600 mt-1">
-                      WhatsApp: {cliente.whatsapp}
+                      WhatsApp: {formatarWhatsApp(cliente.whatsapp)}
                     </p>
                   </div>
                 </div>
