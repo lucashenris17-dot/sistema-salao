@@ -61,6 +61,15 @@ export async function criarSolicitacaoAgendamento(
       return { sucesso: false, erro: 'Horário agendado inválido' };
     }
 
+    // Validar que o horário não está no passado
+    const agora = new Date();
+    if (dataHorario <= agora) {
+      return {
+        sucesso: false,
+        erro: 'Não é possível agendar para horários que já passaram',
+      };
+    }
+
     const supabase = await createSupabaseClient();
     const whatsappLimpo = input.whatsapp.trim();
     // Sobrenome é opcional: normaliza para string vazia ('') quando não
