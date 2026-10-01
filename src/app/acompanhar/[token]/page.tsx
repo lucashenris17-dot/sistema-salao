@@ -5,12 +5,33 @@ import { createBrowserClient } from '@supabase/ssr';
 import { calcularPrevisao } from '@/lib/previsao';
 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; icon: string; mensagem: string }> = {
+  pendente: {
+    label: 'Aguardando confirmação',
+    bg: 'bg-blue-50',
+    text: 'text-blue-700',
+    icon: '🕐',
+    mensagem: 'Sua solicitação foi enviada.\nA Inácia irá confirmar a disponibilidade do horário.',
+  },
+  confirmado: {
+    label: 'Agendamento confirmado',
+    bg: 'bg-emerald-50',
+    text: 'text-emerald-700',
+    icon: '✅',
+    mensagem: 'Seu horário foi confirmado pela Inácia.',
+  },
+  recusado: {
+    label: 'Solicitação recusada',
+    bg: 'bg-red-50',
+    text: 'text-red-700',
+    icon: '✕',
+    mensagem: 'Seu agendamento não foi aprovado.',
+  },
   aguardando: {
   label: 'Aguardando confirmação',
   bg: 'bg-blue-50',
   text: 'text-blue-700',
   icon: '🕐',
-  mensagem: 'Sua solicitação foi enviada.\nA Inacia irá confirmar a disponibilidade do horário.',
+  mensagem: 'Sua solicitação foi enviada.\nA Inácia irá confirmar a disponibilidade do horário.',
 },
 
 em_andamento: {
@@ -60,6 +81,7 @@ export default function AcompanharPage({ params }: { params: Promise<{ token: st
   );
 
   const [atendimento, setAtendimento] = useState<any>(null);
+  const [statusConfirmacao, setStatusConfirmacao] = useState<string | null>(null);
   const [previsao, setPrevisao] = useState<any>({});
   const [erro, setErro] = useState<string | null>(null);
 
@@ -96,6 +118,15 @@ export default function AcompanharPage({ params }: { params: Promise<{ token: st
         };
 
         setAtendimento(atendimentoData);
+
+        // Busca status_confirmacao diretamente (não retornado pela RPC)
+        const { data: confirmData } = await supabase
+          .from('atendimentos')
+          .select('status_confirmacao')
+          .eq('token_acesso', token)
+          .single();
+        setStatusConfirmacao((confirmData as any)?.status_confirmacao ?? null);
+
         const { data: filaData } = await supabase
   .from('atendimentos')
 .select(`
@@ -150,8 +181,8 @@ setPrevisao(preds[atendimentoData.id] || {});
       schema: 'public',
       table: 'atendimentos',
     },
-     (payload) => {
-      
+     (_payload) => {
+
       carregar();
     }
   )
@@ -188,7 +219,12 @@ setPrevisao(preds[atendimentoData.id] || {});
     );
   }
 
-  const statusCfg = STATUS_CONFIG[atendimento.status] || STATUS_CONFIG.aguardando;
+  // Para agendamentos, usa status_confirmacao para determinar o card de status
+  const statusKey =
+    atendimento.status === 'aguardando' && statusConfirmacao
+      ? statusConfirmacao
+      : atendimento.status;
+  const statusCfg = STATUS_CONFIG[statusKey] || STATUS_CONFIG.aguardando;
   const isFinalizado = atendimento.status === 'finalizado';
   const isCancelado = atendimento.status === 'cancelado';
   const isNoShow = atendimento.status === 'no_show';

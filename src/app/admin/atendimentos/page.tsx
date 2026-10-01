@@ -865,11 +865,11 @@ const mensagem = encodeURIComponent(
 
   function statusClasses(status: string) {
     if (status === 'aguardando') {
-      return 'bg-yellow-100 text-yellow-800';
+      return 'bg-amber-100 text-amber-900';
     }
 
     if (status === 'em_andamento') {
-      return 'bg-green-100 text-green-800';
+      return 'bg-zinc-900 text-amber-300';
     }
 
     if (status === 'pausado') {
@@ -877,24 +877,45 @@ const mensagem = encodeURIComponent(
     }
 
     if (status === 'finalizado') {
-      return 'bg-gray-100 text-gray-800';
+      return 'bg-zinc-200 text-zinc-700';
     }
 
     if (status === 'cancelado') {
       return 'bg-red-100 text-red-800';
     }
 
-    return 'bg-gray-100 text-gray-800';
+    return 'bg-zinc-100 text-zinc-700';
   }
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-md mx-auto px-4 py-6">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">
-            Atendimentos
-          </h1>
+  const diasSemana = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+  const dataBase = dataAgendamento ? new Date(`${dataAgendamento}T12:00:00`) : new Date();
+  const inicioSemana = new Date(dataBase);
+  inicioSemana.setDate(dataBase.getDate() - ((dataBase.getDay() + 6) % 7));
+  const diasDaSemana = Array.from({ length: 7 }, (_, indice) => {
+    const data = new Date(inicioSemana);
+    data.setDate(inicioSemana.getDate() + indice);
+    return {
+      iso: `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, '0')}-${String(data.getDate()).padStart(2, '0')}`,
+      diaSemana: diasSemana[data.getDay()],
+      numero: data.getDate(),
+      mes: data.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', ''),
+    };
+  });
+  const campoClass = 'min-h-12 w-full min-w-0 rounded-xl border border-zinc-300 bg-white px-4 py-3 text-base text-zinc-900 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900';
+  const botaoPrincipalClass = 'min-h-12 rounded-xl bg-amber-400 px-4 py-3 text-sm font-semibold text-zinc-900 shadow-sm transition hover:bg-amber-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 disabled:opacity-50';
+  const botaoSecundarioClass = 'min-h-12 rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 disabled:opacity-50';
+  const botaoCancelarClass = 'min-h-12 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700 transition hover:bg-red-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700 disabled:opacity-50';
 
+  return (
+    <div className="min-h-screen bg-zinc-50 text-zinc-900">
+      <div className="mx-auto w-full min-w-0 max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
+        <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-zinc-500">Agenda do salão</p>
+            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Atendimentos</h1>
+            <div className="mt-3 h-1 w-10 rounded-full bg-amber-400" />
+            <p className="mt-3 text-sm leading-relaxed text-zinc-500">Organize os horários e acompanhe cada atendimento.</p>
+          </div>
           <div className="flex gap-2">
             {!showForm && (
               <button
@@ -903,548 +924,295 @@ const mensagem = encodeURIComponent(
                   setShowForm(true);
                   setError(null);
                 }}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                className={`${botaoPrincipalClass} flex-1 sm:flex-none`}
               >
-                + Novo
+                + Novo atendimento
               </button>
-
             )}
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
-            >
-              Sair
-            </button>
           </div>
-        </div>
+        </header>
 
         <ProximoAtendimento atendimentos={atendimentos} loading={loading} />
 
         {error && (
-          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-red-800 text-sm">{error}</p>
+          <div role="alert" className="mb-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm leading-relaxed text-red-700">
+            {error}
           </div>
-          )}
+        )}
 
         {showForm && (
-          <form
-            onSubmit={handleSubmit}
-            className="mb-6 p-4 bg-white border border-gray-200 rounded-lg shadow-sm"
-          >
-            <div className="mb-4">
-              <label
-                htmlFor="cliente_id"
-                className="block text-sm font-medium text-gray-700 mb-1"
-              >
-                Cliente *
-              </label>
-
-              <select
-                id="cliente_id"
-                value={formData.cliente_id}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    cliente_id: e.target.value,
-                  })
-                }
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-900"
-                required
-              >
-                <option className="text-gray-900" value="">
-  Selecione...
-</option>
-
-                {clientes.map((c) => (
-                  <option className="text-gray-900" key={c.id} value={c.id}>
-                    {c.nome} {c.sobrenome}
-                  </option>
-                ))}
-              </select>
+          <form onSubmit={handleSubmit} className="mb-6 min-w-0 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm sm:p-6">
+            <div className="mb-6">
+              <h2 className="text-xl font-bold tracking-tight">{editingId ? 'Editar atendimento' : 'Novo atendimento'}</h2>
+              <p className="mt-1 text-sm text-zinc-500">Escolha o cliente, o procedimento e a forma de atendimento.</p>
             </div>
-
-            <div className="mb-4">
-              <label
-                htmlFor="procedimento_id"
-                className="block text-sm font-medium text-gray-700 mb-1"
-              >
-                Procedimento *
-              </label>
-
-              <select
-                id="procedimento_id"
-                value={formData.procedimento_id}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    procedimento_id: e.target.value,
-                  })
-                }
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-900"
-                required
-              >
-                <option className="text-gray-900" value="">
-  Selecione...
-</option>
-
-                {procedimentos.map((p) => (
-                  <option className="text-gray-900" key={p.id} value={p.id}>
-                    {p.nome}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="mb-4">
-              <label
-                htmlFor="modo"
-                className="block text-sm font-medium text-gray-700 mb-1"
-              >
-                Modo *
-              </label>
-
-  <div className="flex gap-3">
-  <button
-    type="button"
-    onClick={() =>
-      setFormData({
-        ...formData,
-        modo: 'agendamento',
-      })
-    }
-
-    className={`flex-1 py-2 rounded-lg border-2 font-semibold transition ${
-  formData.modo === 'agendamento'
-    ? 'bg-zinc-900 text-white border-zinc-900 shadow-md'
-    : 'bg-gray-100 text-gray-700 border-gray-300'
-}`}
-  >
-    Agendamento
-  </button>
-
-  <button
-    type="button"
-    onClick={() =>
-      setFormData({
-        ...formData,
-        modo: 'fila',
-      })
-    }
-    className={`flex-1 py-2 rounded-lg border-2 font-semibold transition ${
-  formData.modo === 'fila'
-    ? 'bg-zinc-900 text-white border-zinc-900 shadow-md'
-    : 'bg-gray-100 text-gray-700 border-gray-300'
-}`}
-  >
-    Fila
-  </button>
-
-            </div>
-
-          </div>
-            {formData.modo === 'agendamento' && (
-  <div className="mb-4">
-
-    <label
-      htmlFor="data_agendamento"
-      className="block text-sm font-medium text-gray-700 mb-1"
-    >
-      Data do Atendimento *
-    </label>
-
-    <div className="relative min-w-0">
-      <input
-        id="data_agendamento"
-        type="date"
-        autoComplete="off"
-        value={dataAgendamento}
-        onChange={(e) => setDataAgendamento(e.target.value)}
-        className="peer block box-border h-11 w-full min-w-0 max-w-full appearance-none px-3 py-2 border border-gray-300 rounded-lg bg-white text-base text-left text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        required
-      />
-      {!dataAgendamento && (
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-y-2 left-3 right-10 flex items-center bg-white text-base text-gray-900 peer-focus:hidden"
-        >
-          Selecione a data
-        </span>
-      )}
-    </div>
-
-    <label
-      htmlFor="hora_agendamento"
-      className="block text-sm font-medium text-gray-700 mb-1 mt-4"
-    >
-      Horário *
-    </label>
-
-    <div className="relative min-w-0">
-      <input
-        id="hora_agendamento"
-        type="time"
-        step="300"
-        autoComplete="off"
-        value={horaAgendamento}
-        onChange={(e) => setHoraAgendamento(e.target.value)}
-        className="peer block box-border h-11 w-full min-w-0 max-w-full appearance-none px-3 py-2 border border-gray-300 rounded-lg bg-white text-base text-left text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        required
-      />
-      {!horaAgendamento && (
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-y-2 left-3 right-10 flex items-center bg-white text-base text-gray-900 peer-focus:hidden"
-        >
-          Selecione o horário
-        </span>
-      )}
-    </div>
-
-  </div>
-)}
-            {formData.modo === 'fila' && (
-              <div className="mb-4">
-                <label
-                  htmlFor="ordem_fila"
-                  className="block text-sm font-medium text-gray-700 mb-1"
-                >
-                  Ordem na Fila *
-                </label>
-
-                <input
-                  id="ordem_fila"
-                  type="number"
-                  min={1}
-                  value={formData.ordem_fila}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      ordem_fila:
-                        parseInt(e.target.value, 10) || 1,
-                    })
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-900"
-style={{
-  color: '#111827',
-  WebkitTextFillColor: '#111827',
-}}
+            <div className="grid min-w-0 gap-5 sm:grid-cols-2">
+              <div className="min-w-0">
+                <label htmlFor="cliente_id" className="mb-1.5 block text-sm font-medium text-zinc-700">Cliente *</label>
+                <select
+                  id="cliente_id"
+                  value={formData.cliente_id}
+                  onChange={(e) => setFormData({ ...formData, cliente_id: e.target.value })}
+                  className={campoClass}
                   required
-                />
+                >
+                  <option value="">Selecione o cliente</option>
+                  {clientes.map((c) => <option key={c.id} value={c.id}>{c.nome} {c.sobrenome}</option>)}
+                </select>
               </div>
-            )}
+              <div className="min-w-0">
+                <label htmlFor="procedimento_id" className="mb-1.5 block text-sm font-medium text-zinc-700">Procedimento *</label>
+                <select
+                  id="procedimento_id"
+                  value={formData.procedimento_id}
+                  onChange={(e) => setFormData({ ...formData, procedimento_id: e.target.value })}
+                  className={campoClass}
+                  required
+                >
+                  <option value="">Selecione o procedimento</option>
+                  {procedimentos.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
+                </select>
+              </div>
+              <fieldset className="min-w-0 sm:col-span-2">
+                <legend className="mb-2 text-sm font-medium text-zinc-700">Forma de atendimento *</legend>
+                <div className="grid grid-cols-2 gap-3">
+                  {(['agendamento', 'fila'] as const).map((modo) => (
+                    <button
+                      key={modo}
+                      type="button"
+                      aria-pressed={formData.modo === modo}
+                      onClick={() => setFormData({ ...formData, modo })}
+                      className={`min-h-12 rounded-xl border px-3 py-3 text-sm font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 ${
+                        formData.modo === modo
+                          ? 'border-zinc-900 bg-zinc-900 text-white shadow-sm'
+                          : 'border-zinc-200 bg-zinc-50 text-zinc-600 hover:border-zinc-400'
+                      }`}
+                    >
+                      {modo === 'agendamento' ? 'Agendamento' : 'Fila'}
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
 
-            <div className="flex gap-2">
-              <button
-                type="submit"
-                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
-              >
-                {editingId ? 'Salvar' : 'Criar'}
+              {formData.modo === 'agendamento' && (
+                <div className="min-w-0 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 sm:col-span-2">
+                  <p className="mb-3 text-sm font-semibold text-zinc-900">Escolha o dia e o horário</p>
+                  <div className="mb-4 flex min-w-0 max-w-full gap-2 overflow-x-auto pb-2" aria-label="Dias da semana">
+                    {diasDaSemana.map((dia) => {
+                      const selecionado = dataAgendamento === dia.iso;
+                      return (
+                        <button
+                          key={dia.iso}
+                          type="button"
+                          aria-pressed={selecionado}
+                          aria-label={`${dia.diaSemana}, ${dia.numero} de ${dia.mes}`}
+                          onClick={() => setDataAgendamento(dia.iso)}
+                          className={`w-16 shrink-0 rounded-xl border px-2 py-3 text-center transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 ${
+                            selecionado ? 'border-zinc-900 bg-zinc-900 text-white shadow-sm' : 'border-zinc-200 bg-white text-zinc-900 hover:border-zinc-400'
+                          }`}
+                        >
+                          <span className={`block text-xs font-semibold ${selecionado ? 'text-amber-400' : 'text-zinc-500'}`}>{dia.diaSemana}</span>
+                          <span className="my-1 block text-xl font-bold tabular-nums">{dia.numero}</span>
+                          <span className={`block text-xs ${selecionado ? 'text-zinc-300' : 'text-zinc-500'}`}>{dia.mes}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="grid min-w-0 gap-4 sm:grid-cols-2">
+                    <div className="min-w-0">
+                      <label htmlFor="data_agendamento" className="mb-1.5 block text-sm font-medium text-zinc-700">Data do atendimento *</label>
+                      <div className="relative min-w-0">
+                        <input
+                          id="data_agendamento"
+                          type="date"
+                          autoComplete="off"
+                          value={dataAgendamento}
+                          onChange={(e) => setDataAgendamento(e.target.value)}
+                          className="peer block box-border h-12 w-full min-w-0 max-w-full appearance-none rounded-xl border border-zinc-300 bg-white px-4 py-3 text-left text-base text-zinc-900 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
+                          required
+                        />
+                        {!dataAgendamento && (
+                          <span aria-hidden="true" className="pointer-events-none absolute inset-y-2 left-4 right-10 flex items-center bg-white text-base text-zinc-900 peer-focus:hidden">Selecione a data</span>
+                        )}
+                      </div>
+                      <p className="mt-2 text-xs text-zinc-500">Use o calendário para escolher qualquer outra data.</p>
+                    </div>
+                    <div className="min-w-0">
+                      <label htmlFor="hora_agendamento" className="mb-1.5 block text-sm font-medium text-zinc-700">Horário *</label>
+                      <div className="relative min-w-0">
+                        <input
+                          id="hora_agendamento"
+                          type="time"
+                          step="300"
+                          autoComplete="off"
+                          value={horaAgendamento}
+                          onChange={(e) => setHoraAgendamento(e.target.value)}
+                          className="peer block box-border h-12 w-full min-w-0 max-w-full appearance-none rounded-xl border border-zinc-300 bg-white px-4 py-3 text-left text-base text-zinc-900 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
+                          required
+                        />
+                        {!horaAgendamento && (
+                          <span aria-hidden="true" className="pointer-events-none absolute inset-y-2 left-4 right-10 flex items-center bg-white text-base text-zinc-900 peer-focus:hidden">Selecione o horário</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {formData.modo === 'fila' && (
+                <div className="min-w-0">
+                  <label htmlFor="ordem_fila" className="mb-1.5 block text-sm font-medium text-zinc-700">Ordem na fila *</label>
+                  <input
+                    id="ordem_fila"
+                    type="number"
+                    min={1}
+                    value={formData.ordem_fila}
+                    onChange={(e) => setFormData({ ...formData, ordem_fila: parseInt(e.target.value, 10) || 1 })}
+                    className={campoClass}
+                    style={{ color: '#111827', WebkitTextFillColor: '#111827' }}
+                    required
+                  />
+                </div>
+              )}
+            </div>
+            <div className="mt-6 grid grid-cols-2 gap-3 border-t border-zinc-100 pt-5">
+              <button type="submit" className="min-h-12 rounded-xl bg-zinc-900 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900">
+                {editingId ? 'Salvar alterações' : 'Criar atendimento'}
               </button>
-
-              <button
-                type="button"
-                onClick={handleCancelEdit}
-                className="flex-1 px-4 py-2 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400 transition"
-              >
-                Cancelar
-              </button>
+              <button type="button" onClick={handleCancelEdit} className={botaoSecundarioClass}>Cancelar</button>
             </div>
           </form>
         )}
 
-        {showCancel && (
-          <div className="mb-6 p-4 bg-white border border-gray-200 rounded-lg shadow-sm">
-            <h3 className="font-semibold text-gray-900 mb-2">
-              Cancelar Atendimento
-            </h3>
-
-            <label
-              htmlFor="motivo"
-              className="block text-sm font-medium text-gray-700 mb-1"
-            >
-              Motivo *
-            </label>
-
-            <textarea
-              id="motivo"
-              value={cancelForm.motivo}
-              onChange={(e) =>
-                setCancelForm({
-                  ...cancelForm,
-                  motivo: e.target.value,
-                })
-              }
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"
-              placeholder="Informe o motivo do cancelamento"
-              rows={3}
-              required
-            />
-
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={handleCancel}
-                disabled={!!processingId}
-                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition disabled:opacity-50"
-              >
-                Confirmar Cancelamento
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setShowCancel(false);
-                  setCancelForm({ id: '', motivo: '' });
-                }}
-                className="flex-1 px-4 py-2 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400 transition"
-              >
-                Fechar
-              </button>
-            </div>
-          </div>
-        )}
-
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h2 className="text-lg font-bold tracking-tight">Todos os atendimentos</h2>
+          {!loading && <span className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-sm font-semibold tabular-nums text-zinc-600">{atendimentos.length}</span>}
+        </div>
         {loading ? (
-          <div className="text-center py-8">
-            <p className="text-gray-500">Carregando...</p>
+          <div role="status" className="rounded-2xl border border-zinc-200 bg-white p-8 text-center shadow-sm">
+            <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-zinc-200 border-t-amber-400" />
+            <p className="text-sm text-zinc-500">Carregando atendimentos...</p>
           </div>
         ) : atendimentos.length === 0 ? (
-          <div className="text-center py-8 bg-white rounded-lg border border-gray-200">
-            <p className="text-gray-500">
-              Nenhum atendimento cadastrado
-            </p>
+          <div className="rounded-2xl border border-dashed border-zinc-300 bg-white px-6 py-10 text-center">
+            <p className="font-semibold text-zinc-900">Nenhum atendimento cadastrado</p>
+            <p className="mt-2 text-sm text-zinc-500">Os atendimentos confirmados aparecem aqui.</p>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="grid min-w-0 items-start gap-4 lg:grid-cols-2">
             {atendimentos.map((at) => {
               const previsao = previsoes[at.id];
               const processando = processingId === at.id;
+              const horario = at.horario_agendado ? new Date(at.horario_agendado) : null;
 
               return (
-                <div
-                  key={at.id}
-                  className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition"
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-gray-900">
-  {at.clientes?.nome} {at.clientes?.sobrenome}
-</h3>
-
-                      <p className="text-sm text-gray-900 font-medium">
-                        {at.procedimentos?.nome}
-                      </p>
-
-                      <div className="flex items-center gap-2 mt-1 flex-wrap">
-                        <span
-                          className={`text-xs font-medium px-2 py-0.5 rounded ${
-                            at.modo === 'agendamento'
-                              ? 'bg-blue-100 text-blue-800'
-                              : 'bg-amber-100 text-amber-800'
-                          }`}
-                        >
-                          {at.modo === 'agendamento'
-                            ? 'Agendamento'
-                            : 'Fila'}
-                        </span>
-
-                        <span
-                          className={`text-xs font-medium px-2 py-0.5 rounded ${statusClasses(
-                            at.status
-                          )}`}
-                        >
-                          {formatStatus(at.status)}
-                        </span>
-                      </div>
-                    </div>
-
-                    <span className="text-xs text-gray-400">
-                      {new Date(at.criado_em).toLocaleString(
-                        'pt-BR'
+                <article key={at.id} className="min-w-0 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
+                  <div className={`flex flex-wrap items-center justify-between gap-3 border-b p-4 sm:px-5 ${at.status === 'em_andamento' ? 'border-amber-200 bg-amber-50' : 'border-zinc-100 bg-zinc-50/70'}`}>
+                    <div className="min-w-0">
+                      {at.modo === 'agendamento' && horario ? (
+                        <time dateTime={at.horario_agendado}>
+                          <span className="block text-2xl font-bold tracking-tight tabular-nums text-zinc-900">
+                            {horario.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          <span className="mt-1 block text-xs font-medium text-zinc-500">
+                            {horario.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }).replace('-feira', '')}
+                          </span>
+                        </time>
+                      ) : (
+                        <div>
+                          <p className="text-xl font-bold tracking-tight">{at.modo === 'fila' ? `Fila${at.ordem_fila ? ` · ${at.ordem_fila}º` : ''}` : 'Agendamento'}</p>
+                          <p className="mt-1 text-xs text-zinc-500">{at.modo === 'fila' ? 'Ordem de atendimento' : 'Horário não informado'}</p>
+                        </div>
                       )}
+                    </div>
+                    <span className={`inline-flex rounded-full px-3 py-1.5 text-xs font-semibold ${statusClasses(at.status)}`}>
+                      {formatStatus(at.status)}
                     </span>
                   </div>
-
-                  {at.modo === 'agendamento' &&
-                    at.horario_agendado && (
-                      <p className="text-xs text-gray-500 mb-1">
-                        Horário:{' '}
-                        {new Date(
-                          at.horario_agendado
-                        ).toLocaleString('pt-BR')}
-                      </p>
-                    )}
-
-                  {at.modo === 'fila' && at.ordem_fila && (
-                    <p className="text-xs text-gray-500 mb-1">
-                      Ordem: {at.ordem_fila}
-                    </p>
-                  )}
-
-                  {previsao?.inicio_previsto && (
-                    <p className="text-xs text-blue-600 mb-1">
-                      Início previsto:{' '}
-                      {new Date(
-                        previsao.inicio_previsto
-                      ).toLocaleString('pt-BR')}
-                    </p>
-                  )}
-
-                  {previsao?.fim_previsto && (
-                    <p className="text-xs text-blue-600 mb-1">
-                      Fim previsto:{' '}
-                      {new Date(
-                        previsao.fim_previsto
-                      ).toLocaleString('pt-BR')}
-                    </p>
-                  )}
-
-                  {previsao?.minutos_restantes != null &&
-                    previsao.minutos_restantes > 0 && (
-                      <p className="text-xs text-amber-600 mb-1">
-                        Restantes:{' '}
-                        {previsao.minutos_restantes} min
-                      </p>
-                    )}
-
-                  {at.status === 'cancelado' &&
-                    at.motivo_cancelamento && (
-                      <p className="text-xs text-red-600 mb-1">
-                        Motivo: {at.motivo_cancelamento}
-                      </p>
-                    )}
-
-                  {at.status === 'aguardando' && (
-                    <div className="flex flex-wrap gap-2 mt-3">
-                      <button
-                        onClick={() => handleIniciar(at.id)}
-                        className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700"
-                      >
-                        Iniciar
-                      </button>
-                      <button
-                        onClick={() => handleEdit(at)}
-                        className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700"
-                      >
-                        Editar
-                      </button>
-                      <button
-                        onClick={() => openCancel(at)}
-                        className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700"
-                      >
-                        Cancelar
-                      </button>
+                  <div className="p-4 sm:p-5">
+                    <h3 className="break-words text-lg font-bold tracking-tight text-zinc-900">{at.clientes?.nome} {at.clientes?.sobrenome}</h3>
+                    <p className="mt-1 break-words text-sm text-zinc-600">{at.procedimentos?.nome}</p>
+                    {at.clientes?.whatsapp && <p className="mt-2 break-words text-sm font-medium text-zinc-700">WhatsApp: {at.clientes.whatsapp}</p>}
+                    <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                      <span className="rounded-lg bg-zinc-100 px-2.5 py-1 font-medium text-zinc-600">{at.modo === 'agendamento' ? 'Agendamento' : 'Fila'}</span>
+                      {at.procedimentos?.duracao_estimada_min != null && <span className="text-zinc-500">{at.procedimentos.duracao_estimada_min} min de duração</span>}
                     </div>
-                  )}
 
-                  {at.status === 'em_andamento' && (
-                    <div className="flex flex-wrap gap-2 mt-3">
-                      <button
-                        onClick={() => handlePausar(at.id)}
-                        className="px-3 py-1.5 bg-amber-600 text-white rounded-lg text-sm hover:bg-amber-700"
-                      >
-                        Pausar
-                      </button>
-                      <button
-                        onClick={() => handleFinalizar(at.id)}
-                        className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700"
-                      >
-                        Finalizar
-                      </button>
-                      <button
-                        onClick={() => openCancel(at)}
-                        className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700"
-                      >
-                        Cancelar
-                      </button>
-                    </div>
-                  )}
-
-                  {at.status === 'pausado' && (
-                    <div className="flex flex-wrap gap-2 mt-3">
-                      <button
-                        onClick={() => handleContinuar(at.id)}
-                        className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700"
-                      >
-                        Continuar
-                      </button>
-                      <button
-                        onClick={() => handleFinalizar(at.id)}
-                        className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700"
-                      >
-                        Finalizar
-                      </button>
-                      <button
-                        onClick={() => openCancel(at)}
-                        className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700"
-                      >
-                        Cancelar
-                      </button>
-                    </div>
-                  )}
-
-                  {at.token_acesso && (
-  <div className="flex gap-2 mt-3">
-    <button
-      onClick={() => {
-  console.log('CLICOU WHATS', at);
-  handleEnviarWhatsApp(at);
-}}
-      className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700"
-    >
-      WhatsApp
-    </button>
-
-    <button
-      onClick={() => handleCopiarLink(at)}
-      className="px-3 py-1.5 border rounded-lg text-sm text-zinc-900 font-medium hover:bg-gray-50"
-    >
-      {copiadoId === at.id ? 'Link copiado!' : 'Copiar link do cliente'}
-    </button>
-  </div>
-)}
-                </div>
+                    {(previsao?.inicio_previsto || previsao?.fim_previsto || (previsao?.minutos_restantes != null && previsao.minutos_restantes > 0)) && (
+                      <div className="mt-4 space-y-2 rounded-xl bg-zinc-50 p-3 text-sm text-zinc-600">
+                        {previsao?.inicio_previsto && (
+                          <p className="flex flex-wrap justify-between gap-x-3 gap-y-1"><span>Início previsto</span><span className="font-medium text-zinc-900">{new Date(previsao.inicio_previsto).toLocaleString('pt-BR')}</span></p>
+                        )}
+                        {previsao?.fim_previsto && (
+                          <p className="flex flex-wrap justify-between gap-x-3 gap-y-1"><span>Fim previsto</span><span className="font-medium text-zinc-900">{new Date(previsao.fim_previsto).toLocaleString('pt-BR')}</span></p>
+                        )}
+                        {previsao?.minutos_restantes != null && previsao.minutos_restantes > 0 && (
+                          <p className="font-semibold text-amber-800">{previsao.minutos_restantes} min restantes</p>
+                        )}
+                      </div>
+                    )}
+                    {at.status === 'cancelado' && at.motivo_cancelamento && (
+                      <p className="mt-4 break-words rounded-xl bg-red-50 p-3 text-sm text-red-700"><span className="font-semibold">Motivo do cancelamento: </span>{at.motivo_cancelamento}</p>
+                    )}
+                    {at.status === 'aguardando' && (
+                      <div className="mt-4 grid grid-cols-2 gap-2 border-t border-zinc-100 pt-4 sm:grid-cols-3">
+                        <button onClick={() => handleIniciar(at.id)} disabled={processando} className={`${botaoPrincipalClass} col-span-2 sm:col-span-1`}>Iniciar</button>
+                        <button onClick={() => handleEdit(at)} className={botaoSecundarioClass}>Editar</button>
+                        <button onClick={() => openCancel(at)} className={botaoCancelarClass}>Cancelar</button>
+                      </div>
+                    )}
+                    {at.status === 'em_andamento' && (
+                      <div className="mt-4 grid grid-cols-2 gap-2 border-t border-zinc-100 pt-4 sm:grid-cols-3">
+                        <button onClick={() => handlePausar(at.id)} disabled={processando} className={botaoSecundarioClass}>Pausar</button>
+                        <button onClick={() => handleFinalizar(at.id)} disabled={processando} className={botaoPrincipalClass}>Finalizar</button>
+                        <button onClick={() => openCancel(at)} className={`${botaoCancelarClass} col-span-2 sm:col-span-1`}>Cancelar</button>
+                      </div>
+                    )}
+                    {at.status === 'pausado' && (
+                      <div className="mt-4 grid grid-cols-2 gap-2 border-t border-zinc-100 pt-4 sm:grid-cols-3">
+                        <button onClick={() => handleContinuar(at.id)} disabled={processando} className={botaoPrincipalClass}>Continuar</button>
+                        <button onClick={() => handleFinalizar(at.id)} disabled={processando} className={botaoSecundarioClass}>Finalizar</button>
+                        <button onClick={() => openCancel(at)} className={`${botaoCancelarClass} col-span-2 sm:col-span-1`}>Cancelar</button>
+                      </div>
+                    )}
+                    {at.token_acesso && (
+                      <div className="mt-3 grid grid-cols-1 gap-2 min-[380px]:grid-cols-2">
+                        <button onClick={() => { console.log('CLICOU WHATS', at); handleEnviarWhatsApp(at); }} className={botaoSecundarioClass}>Enviar WhatsApp</button>
+                        <button onClick={() => handleCopiarLink(at)} className={botaoSecundarioClass}>{copiadoId === at.id ? 'Link copiado!' : 'Copiar link do cliente'}</button>
+                      </div>
+                    )}
+                    <p className="mt-4 text-xs leading-relaxed text-zinc-400">Criado em {new Date(at.criado_em).toLocaleString('pt-BR')}</p>
+                  </div>
+                </article>
               );
             })}
           </div>
         )}
 
-      {showCancel && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md">
-            <h2 className="text-lg font-semibold mb-4">Cancelar atendimento</h2>
-            <textarea
-              value={cancelForm.motivo}
-              onChange={(e) => setCancelForm({ ...cancelForm, motivo: e.target.value })}
-              placeholder="Motivo do cancelamento"
-              className="w-full border rounded-lg p-3 min-h-24"
-            />
-            <div className="flex justify-end gap-2 mt-4">
-              <button
-                onClick={() => setShowCancel(false)}
-                className="px-4 py-2 border rounded-lg"
-              >
-                Voltar
-              </button>
-              <button
-                onClick={handleCancel}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg"
-              >
-                Confirmar cancelamento
-              </button>
+        {showCancel && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-zinc-950/50 p-4 backdrop-blur-sm">
+            <div role="dialog" aria-modal="true" aria-labelledby="cancelamento-titulo" className="my-auto w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl sm:p-6">
+              <span className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-red-50 text-xl font-bold text-red-600" aria-hidden="true">×</span>
+              <h2 id="cancelamento-titulo" className="text-xl font-bold tracking-tight text-zinc-900">Cancelar atendimento</h2>
+              <p className="mb-5 mt-2 text-sm leading-relaxed text-zinc-500">Informe o motivo para registrar o cancelamento.</p>
+              <label htmlFor="motivo" className="mb-1.5 block text-sm font-medium text-zinc-700">Motivo *</label>
+              <textarea
+                id="motivo"
+                value={cancelForm.motivo}
+                onChange={(e) => setCancelForm({ ...cancelForm, motivo: e.target.value })}
+                placeholder="Informe o motivo do cancelamento"
+                className={`${campoClass} min-h-28 resize-y`}
+                rows={3}
+                required
+              />
+              {error && <p role="alert" className="mt-3 text-sm text-red-700">{error}</p>}
+              <div className="mt-5 grid gap-2">
+                <button onClick={handleCancel} disabled={!!processingId} className="min-h-12 rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-50">Confirmar cancelamento</button>
+                <button onClick={() => { setShowCancel(false); setCancelForm({ id: '', motivo: '' }); }} className={botaoSecundarioClass}>Voltar</button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
-  </div>
   );
 }
-
-
-
-
-
-
-

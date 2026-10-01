@@ -3,13 +3,29 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { createBrowserClient } from '@supabase/ssr';
+import { AdminIcon } from './admin-icon';
 
-function Card({ nome, valor }: { nome: string; valor: number }) {
+function Card({ nome, valor, href, icon, destaque = false, loading = false }: {
+  nome: string;
+  valor: number;
+  href: string;
+  icon: string;
+  destaque?: boolean;
+  loading?: boolean;
+}) {
   return (
-    <div className="bg-white rounded-2xl border p-5 shadow-sm">
-      <p className="text-sm text-zinc-600">{nome}</p>
-      <p className="text-4xl font-bold text-zinc-900 mt-2">{valor}</p>
-    </div>
+    <Link href={href} className={`group flex min-h-40 min-w-0 flex-col justify-between rounded-2xl border p-5 shadow-sm transition-colors sm:p-6 ${destaque ? 'border-amber-400 bg-amber-400 hover:bg-amber-300' : 'border-zinc-200 bg-white hover:border-zinc-400'}`}>
+      <div className="flex items-center justify-between gap-3">
+        <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${destaque ? 'bg-zinc-900 text-amber-400' : 'bg-zinc-100 text-zinc-600'}`}>
+          <AdminIcon name={icon} />
+        </span>
+        <AdminIcon name="arrow" className="h-5 w-5 text-zinc-600 transition-transform group-hover:translate-x-1" />
+      </div>
+      <div className="mt-5 flex items-end justify-between gap-3">
+        <p className="text-sm font-semibold text-zinc-700">{nome}</p>
+        <p className="shrink-0 text-4xl font-bold tracking-tight text-zinc-900">{loading ? '—' : valor}</p>
+      </div>
+    </Link>
   );
 }
 
@@ -26,6 +42,8 @@ export default function AdminPage() {
   });
 
   const [proximosHorarios, setProximosHorarios] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [erro, setErro] = useState<string | null>(null);
 
   // Buscar próximas solicitações pendentes (status_confirmacao pendente)
 
@@ -34,6 +52,8 @@ export default function AdminPage() {
   }, []);
 
   async function carregar() {
+    setLoading(true);
+    setErro(null);
     try {
       // Buscar todos os atendimentos (sem filtro de status_confirmacao para ver tudo)
       const { data, error } = await supabase
@@ -58,6 +78,7 @@ export default function AdminPage() {
 
       if (error) {
         console.log(error);
+        setErro('Não foi possível carregar o resumo. Tente novamente.');
         return;
       }
 
@@ -108,96 +129,117 @@ export default function AdminPage() {
 
     } catch (err) {
       console.log(err);
+      setErro('Não foi possível carregar o resumo. Tente novamente.');
+    } finally {
+      setLoading(false);
     }
   }
 
   return (
-    <div className="bg-zinc-50 px-4 py-6 md:min-h-screen md:p-6">
-      <nav
-        aria-label="Acessos principais"
-        className="mx-auto flex w-full max-w-md flex-col gap-4 md:hidden"
-      >
-        <Link
-          href="/admin/atendimentos"
-          className="flex min-h-24 items-center gap-4 rounded-2xl border border-zinc-200 bg-white p-6 text-xl font-semibold text-zinc-900 shadow-sm transition-colors hover:bg-zinc-100 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-zinc-900 active:bg-zinc-100"
-        >
-          <span aria-hidden="true" className="text-3xl">📋</span>
-          Atendimentos
-        </Link>
-        <Link
-          href="/admin/clientes"
-          className="flex min-h-24 items-center gap-4 rounded-2xl border border-zinc-200 bg-white p-6 text-xl font-semibold text-zinc-900 shadow-sm transition-colors hover:bg-zinc-100 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-zinc-900 active:bg-zinc-100"
-        >
-          <span aria-hidden="true" className="text-3xl">👥</span>
-          Clientes
-        </Link>
-        <Link
-          href="/admin/procedimentos"
-          className="flex min-h-24 items-center gap-4 rounded-2xl border border-zinc-200 bg-white p-6 text-xl font-semibold text-zinc-900 shadow-sm transition-colors hover:bg-zinc-100 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-zinc-900 active:bg-zinc-100"
-        >
-          <span aria-hidden="true" className="text-3xl">✂️</span>
-          Procedimentos
-        </Link>
-      </nav>
-
-      <div className="hidden max-w-5xl mx-auto md:block">
-
-        <header className="mb-6">
-          <h1 className="text-3xl font-bold text-zinc-900 mb-2">
-            ✂️ Salão da Inacia
-          </h1>
-          <p className="text-zinc-600 mb-2">
-            Bom dia, Inacia
+    <div className="mx-auto w-full min-w-0 max-w-6xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
+      <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+        <div>
+          <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-zinc-500">
+            <span className="h-1.5 w-6 rounded-full bg-amber-400" /> Visão geral
           </p>
-          <p className="text-zinc-500 text-sm">
-            Painel de controle
-          </p>
-        </header>
-
-        <div className="grid grid-cols-3 gap-4 mb-6">
-          <Card nome="Atendimentos hoje" valor={dados.total} />
-          <Card nome="Solicitações pendentes" valor={dados.pendentes} />
-          <Card nome="Bloqueios ativos" valor={dados.bloqueios} />
+          <h1 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">Olá, Inácia.</h1>
+          <p className="mt-2 text-sm leading-relaxed text-zinc-500">Seu salão e os compromissos do dia, em um só lugar.</p>
         </div>
+        <Link href="/admin/atendimentos" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-zinc-900 px-5 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-zinc-800">
+          <AdminIcon name="calendar" /> Abrir atendimentos
+        </Link>
+      </header>
 
-        <section className="bg-white rounded-2xl border p-5 mt-6">
+      {erro && (
+        <div role="alert" className="flex flex-col gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 sm:flex-row sm:items-center sm:justify-between">
+          <p>{erro}</p>
+          <button type="button" onClick={carregar} className="min-h-12 rounded-xl border border-red-200 bg-white px-4 font-semibold">Tentar novamente</button>
+        </div>
+      )}
 
-          <h2 className="text-xl font-bold text-zinc-900 mb-4">
-            Próximos horários
-          </h2>
+      <section aria-label="Resumo do salão" aria-busy={loading} className="grid gap-4 sm:grid-cols-3">
+        <Card nome="Solicitações pendentes" valor={dados.pendentes} href="/admin/solicitacoes" icon="inbox" destaque loading={loading || !!erro} />
+        <Card nome="Atendimentos do dia" valor={dados.total} href="/admin/atendimentos" icon="calendar" loading={loading || !!erro} />
+        <Card nome="Bloqueios da agenda" valor={dados.bloqueios} href="/admin/bloqueios" icon="block" loading={loading || !!erro} />
+      </section>
 
-          {proximosHorarios.length === 0 ? (
-            <p className="text-zinc-500">
-              Nenhum agendamento para hoje
-            </p>
+      <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+        <section className="min-w-0 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm sm:p-6" aria-busy={loading}>
+          <div className="mb-5 flex items-start justify-between gap-3">
+            <div>
+              <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-zinc-500">Agenda de hoje</p>
+              <h2 className="text-xl font-bold tracking-tight text-zinc-900">Próximos atendimentos</h2>
+            </div>
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-zinc-900">
+              <AdminIcon name="clock" />
+            </span>
+          </div>
+
+          {loading ? (
+            <div role="status" className="rounded-xl border border-dashed border-zinc-200 bg-zinc-50 px-4 py-10 text-center text-sm text-zinc-500">
+              <span className="mx-auto mb-3 block h-6 w-6 animate-spin rounded-full border-2 border-zinc-200 border-t-zinc-900" />
+              Carregando os horários...
+            </div>
+          ) : erro ? (
+            <p className="rounded-xl bg-zinc-50 p-6 text-sm text-zinc-500">Os horários aparecerão aqui quando o resumo for carregado.</p>
+          ) : proximosHorarios.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-zinc-200 bg-zinc-50 px-4 py-10 text-center">
+              <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-zinc-400 shadow-sm"><AdminIcon name="calendar" className="h-6 w-6" /></span>
+              <p className="font-semibold text-zinc-900">Nenhum agendamento para hoje</p>
+              <p className="mx-auto mt-1 max-w-xs text-sm leading-relaxed text-zinc-500">Acesse os atendimentos para acompanhar sua agenda.</p>
+            </div>
           ) : (
             <div className="space-y-3">
-
-              {proximosHorarios.map((item, index) => (
-                <div
-                  key={item.id}
-                  className="border rounded-xl p-4"
-                >
-                  <p className="text-xs font-bold text-amber-500 uppercase tracking-wide">{new Date(item.horario_agendado || '').toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
-                  <p className="font-bold text-zinc-900 text-base">{item.clientes?.nome} {item.clientes?.sobrenome}</p>
-                  <p className="text-sm text-zinc-600">{item.procedimentos?.nome}</p>
-                </div>
+              {proximosHorarios.map((item) => (
+                <Link key={item.id} href="/admin/atendimentos" className="group flex min-w-0 items-center gap-3 rounded-xl border border-zinc-200 p-3 transition-colors hover:border-amber-400 hover:bg-amber-50/40 sm:gap-4 sm:p-4">
+                  <div className="flex w-[72px] shrink-0 flex-col items-center justify-center rounded-xl bg-zinc-900 px-2 py-3 text-white">
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-400">Horário</span>
+                    <span className="mt-1 text-lg font-bold tabular-nums">{new Date(item.horario_agendado || '').toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="break-words text-base font-bold text-zinc-900">{item.clientes?.nome} {item.clientes?.sobrenome}</p>
+                    <p className="mt-1 break-words text-sm text-zinc-500">{item.procedimentos?.nome}</p>
+                    {item.procedimentos?.duracao_estimada_min && <p className="mt-2 text-xs font-medium text-zinc-500">{item.procedimentos.duracao_estimada_min} minutos</p>}
+                  </div>
+                  <AdminIcon name="arrow" className="hidden h-4 w-4 text-zinc-400 sm:block" />
+                </Link>
               ))}
-
             </div>
           )}
-
+          <Link href="/admin/atendimentos" className="mt-5 flex min-h-12 items-center justify-center gap-2 rounded-xl border border-zinc-200 px-4 py-3 text-sm font-semibold text-zinc-900 transition-colors hover:bg-zinc-50">
+            Ver todos os atendimentos <AdminIcon name="arrow" className="h-4 w-4" />
+          </Link>
         </section>
 
-        <div className="mt-6">
-          <Link
-            href="/admin/atendimentos"
-            className="block w-full text-center bg-zinc-900 text-white py-4 rounded-2xl text-base font-semibold shadow-md hover:bg-zinc-800 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900"
-          >
-            Ver atendimentos
+        <section className="min-w-0 space-y-4" aria-labelledby="acessos-titulo">
+          <div className="px-1">
+            <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-zinc-500">Tudo à mão</p>
+            <h2 id="acessos-titulo" className="text-xl font-bold tracking-tight text-zinc-900">Cuide do seu salão</h2>
+          </div>
+          <nav aria-label="Acessos principais" className="grid gap-3">
+            {[
+              { href: '/admin/clientes', nome: 'Clientes', descricao: 'Contatos e cadastro de clientes', icon: 'users' },
+              { href: '/admin/procedimentos', nome: 'Procedimentos', descricao: 'Serviços, duração e disponibilidade', icon: 'scissors' },
+              { href: '/admin/bloqueios', nome: 'Bloqueios', descricao: 'Consulte e organize suas pausas', icon: 'block' },
+            ].map((item) => (
+              <Link key={item.href} href={item.href} className="group flex min-h-24 min-w-0 items-center gap-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm transition-colors hover:border-zinc-400 sm:p-5">
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-zinc-100 text-zinc-900 group-hover:bg-amber-100"><AdminIcon name={item.icon} className="h-6 w-6" /></span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-base font-bold text-zinc-900">{item.nome}</p>
+                  <p className="mt-1 text-xs leading-relaxed text-zinc-500">{item.descricao}</p>
+                </div>
+                <AdminIcon name="arrow" className="h-4 w-4 text-zinc-400" />
+              </Link>
+            ))}
+          </nav>
+          <Link href="/admin/solicitacoes" className="flex min-h-20 items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-zinc-900 sm:p-5">
+            <div className="min-w-0">
+              <p className="text-sm font-bold">Novos pedidos de horário</p>
+              <p className="mt-1 text-xs leading-relaxed text-zinc-600">Revise e responda às solicitações.</p>
+            </div>
+            <AdminIcon name="arrow" />
           </Link>
-        </div>
-
+        </section>
       </div>
     </div>
   );

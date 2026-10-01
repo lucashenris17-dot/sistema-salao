@@ -143,6 +143,7 @@ export async function recusarSolicitacao(id: string): Promise<AcaoResponse<void>
       .update({
         status: 'cancelado',
         status_confirmacao: 'recusado',
+        motivo_cancelamento: 'Solicitação recusada pela administração',
       })
       .eq('id', id);
 

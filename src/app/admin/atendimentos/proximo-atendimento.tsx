@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { AdminIcon } from '../admin-icon';
 import type { AtendimentoListItem } from './page';
 
 export function selecionarProximoAtendimento(
@@ -50,48 +51,53 @@ export default function ProximoAtendimento({
     <section
       aria-labelledby="proximo-atendimento-titulo"
       aria-busy={loading}
-      className="mb-6 rounded-xl border border-blue-200 bg-blue-50 p-4 shadow-sm"
+      className="mb-6 min-w-0 rounded-2xl border border-zinc-800 bg-zinc-900 p-5 text-white shadow-sm sm:p-6"
     >
       <h2
         id="proximo-atendimento-titulo"
-        className="mb-3 text-sm font-semibold text-blue-800"
+        className="mb-4 flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-amber-400"
       >
+        <AdminIcon name="clock" className="h-4 w-4" />
         Próximo atendimento
       </h2>
 
       {loading ? (
-        <p className="text-sm text-gray-600">Carregando próximo atendimento...</p>
+        <p className="text-sm text-zinc-300">Carregando próximo atendimento...</p>
       ) : proximo && horario ? (
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <p className="break-words text-lg font-semibold text-gray-900">
+        <div className="flex flex-col items-start justify-between gap-4 min-[400px]:flex-row min-[400px]:items-center">
+          <div className="w-full min-w-0 flex-1">
+            <p className="break-words text-xl font-bold tracking-tight text-white sm:text-2xl">
               {[proximo.clientes?.nome, proximo.clientes?.sobrenome]
                 .filter(Boolean).join(' ') || 'Cliente não informado'}
             </p>
-            <p className="mt-1 break-words text-sm text-gray-700">
+            <p className="mt-2 break-words text-sm text-zinc-300">
               {proximo.procedimentos?.nome || 'Procedimento não informado'}
             </p>
           </div>
           <time
             dateTime={proximo.horario_agendado}
-            className="shrink-0 rounded-lg bg-white px-3 py-2 text-center text-blue-800"
+            className="w-full shrink-0 rounded-xl border border-zinc-700 bg-zinc-800 px-5 py-3 text-center text-white min-[400px]:w-auto"
           >
-            <span className="block text-xl font-bold tabular-nums">
+            <span className="block text-3xl font-bold tracking-tight tabular-nums text-amber-400">
               {horario.toLocaleTimeString('pt-BR', {
                 timeZone: 'America/Sao_Paulo',
                 hour: '2-digit',
                 minute: '2-digit',
               })}
             </span>
-            <span className="block text-xs">
+            <span className="mt-1 block text-xs font-medium text-zinc-300">
               {horario.toLocaleDateString('pt-BR', {
                 timeZone: 'America/Sao_Paulo',
+                weekday: 'short',
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
               })}
             </span>
           </time>
         </div>
       ) : (
-        <p className="text-sm text-gray-600">
+        <p className="text-sm text-zinc-300">
           Nenhum agendamento futuro aguardando.
         </p>
       )}

@@ -1,0 +1,36 @@
+.shell {
+  min-width: 0;
+  color-scheme: only light;
+  color: #18181b;
+  background: #fafafa;
+}
+
+.shell :where(a, button, input, select, textarea):focus-visible {
+  outline: 2px solid #a16207;
+  outline-offset: 3px;
+}
+
+.shell :where(input, select, textarea) {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.shell :where(button, a) {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.shell button:disabled {
+  cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shell *,
+  .shell *::before,
+  .shell *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
