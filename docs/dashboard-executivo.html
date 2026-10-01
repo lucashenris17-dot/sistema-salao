@@ -1,0 +1,983 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard — Sistema Salão da Inácia</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --carbon: #1A1A1A;
+  --rose: #E8B4A8;
+  --slate: #2D2D2D;
+  --taupe: #A89B8C;
+  --linen: #F8F6F3;
+  --sky: #0EA5E9;
+  --emerald: #10B981;
+  --amber: #F59E0B;
+  --red: #EF4444;
+  --bg-primary: var(--linen);
+  --bg-secondary: #FFFFFF;
+  --text-primary: var(--carbon);
+  --text-secondary: var(--taupe);
+  --text-inverse: var(--linen);
+  --border: rgba(26, 26, 26, 0.1);
+  --shadow: rgba(26, 26, 26, 0.08);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg-primary: #0F0F0F;
+    --bg-secondary: #1A1A1A;
+    --text-primary: #F8F6F3;
+    --text-secondary: #A89B8C;
+    --text-inverse: #1A1A1A;
+    --border: rgba(248, 246, 243, 0.1);
+    --shadow: rgba(0, 0, 0, 0.3);
+  }
+}
+:root[data-theme="dark"] {
+  --bg-primary: #0F0F0F;
+  --bg-secondary: #1A1A1A;
+  --text-primary: #F8F6F3;
+  --text-secondary: #A89B8C;
+  --text-inverse: #1A1A1A;
+  --border: rgba(248, 246, 243, 0.1);
+  --shadow: rgba(0, 0, 0, 0.3);
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  -webkit-font-smoothing: antialiased;
+  padding: 16px;
+}
+h1, h2, h3 {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-weight: 700;
+  text-wrap: balance;
+  line-height: 1.2;
+}
+h1 { font-size: clamp(2rem, 5vw, 2.75rem); letter-spacing: -0.02em; }
+h2 { font-size: 1.75rem; letter-spacing: -0.01em; }
+h3 { font-size: 1.25rem; }
+code { font-family: 'JetBrains Mono', 'Courier New', monospace; font-size: 0.9em; }
+.container { max-width: 1400px; margin: 0 auto; }
+header {
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  padding: 24px;
+  border-radius: 16px;
+  margin-bottom: 32px;
+}
+.brand { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+.logo { font-size: 2rem; }
+.brand-text h1 { font-size: 1.5rem; margin-bottom: 2px; }
+.brand-subtitle {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+.tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+.tab {
+  padding: 8px 16px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 8px;
+  font-weight: 500;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+}
+.tab:hover { background: var(--bg-primary); color: var(--text-primary); }
+.tab.active { background: var(--rose); color: var(--text-inverse); }
+.section { margin-bottom: 48px; }
+.section-header { margin-bottom: 24px; }
+.section-title { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.section-icon { font-size: 1.5rem; }
+.section-description { color: var(--text-secondary); font-size: 0.95rem; }
+.card {
+  background: var(--bg-secondary);
+  border-radius: 16px;
+  padding: 24px;
+  border: 1px solid var(--border);
+  box-shadow: 0 2px 8px var(--shadow);
+}
+.grid { display: grid; gap: 24px; }
+.grid-2 { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.grid-3 { grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+.stat-card { text-align: center; padding: 32px 24px; }
+.stat-value {
+  font-size: 3rem;
+  font-weight: 700;
+  font-family: 'Playfair Display', serif;
+  color: var(--rose);
+  line-height: 1;
+  margin-bottom: 8px;
+}
+.stat-label {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.badge-high { background: rgba(239, 68, 68, 0.15); color: var(--red); }
+.badge-medium { background: rgba(245, 158, 11, 0.15); color: var(--amber); }
+.badge-low { background: rgba(16, 185, 129, 0.15); color: var(--emerald); }
+.task-list { display: flex; flex-direction: column; gap: 16px; }
+.task-item {
+  padding: 20px;
+  background: var(--bg-primary);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  transition: all 0.2s;
+}
+.task-item:hover {
+  border-color: var(--rose);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px var(--shadow);
+}
+.task-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+.task-title { font-weight: 600; font-size: 1.05rem; flex: 1; }
+.task-description {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  margin-bottom: 12px;
+  line-height: 1.5;
+}
+.task-meta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+.task-meta code {
+  background: var(--bg-secondary);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+}
+.filter-group { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+.filter-btn {
+  padding: 8px 16px;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+.filter-btn:hover { border-color: var(--rose); }
+.filter-btn.active {
+  background: var(--rose);
+  color: var(--text-inverse);
+  border-color: var(--rose);
+}
+.tech-stack { display: flex; flex-wrap: wrap; gap: 12px; }
+.tech-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--bg-primary);
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+.tech-label { color: var(--text-secondary); font-weight: 500; }
+.tech-value { font-weight: 600; }
+.status-indicator {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 8px;
+}
+.status-ok { background: var(--emerald); }
+footer {
+  text-align: center;
+  padding: 32px 0;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  border-top: 1px solid var(--border);
+  margin-top: 48px;
+}
+@media (max-width: 768px) {
+  .task-header { flex-direction: column; }
+  .grid-2, .grid-3 { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+<header>
+  <div class="brand">
+    <div class="logo">✂️</div>
+    <div class="brand-text">
+      <h1>Sistema Salão da Inácia</h1>
+      <div class="brand-subtitle">Dashboard Executivo</div>
+    </div>
+  </div>
+  <nav class="tabs">
+    <button class="tab active" data-tab="overview">Visão Geral</button>
+    <button class="tab" data-tab="pending">Pendências</button>
+    <button class="tab" data-tab="docs">Documentação</button>
+  </nav>
+</header>
+
+<main>
+  <div class="tab-content" id="overview-tab">
+    <section class="section">
+      <div class="section-header">
+        <div class="section-title">
+          <span class="section-icon">💚</span>
+          <h2>Saúde do Projeto</h2>
+        </div>
+        <p class="section-description">Estado atual do sistema em tempo real</p>
+      </div>
+      <div class="grid grid-2">
+        <div class="card">
+          <h3 style="margin-bottom: 20px; display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 1.5rem;">🔬</span>
+            Qualidade de Código
+          </h3>
+          <div style="display: flex; flex-direction: column; gap: 16px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px; background: var(--bg-primary); border-radius: 8px;">
+              <div style="display: flex; align-items: center; gap: 12px;">
+                <span class="status-indicator status-ok"></span>
+                <span style="font-weight: 600;">TypeScript</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <code style="font-size: 0.9rem; color: var(--emerald);">0 erros</code>
+                <span style="font-size: 1.2rem;">✅</span>
+              </div>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px; background: var(--bg-primary); border-radius: 8px;">
+              <div style="display: flex; align-items: center; gap: 12px;">
+                <span class="status-indicator status-ok"></span>
+                <span style="font-weight: 600;">Build</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <code style="font-size: 0.9rem; color: var(--emerald);">Passando</code>
+                <span style="font-size: 1.2rem;">✅</span>
+              </div>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px; background: var(--bg-primary); border-radius: 8px;">
+              <div style="display: flex; align-items: center; gap: 12px;">
+                <span class="status-indicator status-ok"></span>
+                <span style="font-weight: 600;">Documentação</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <code style="font-size: 0.9rem; color: var(--emerald);">7 arquivos</code>
+                <span style="font-size: 1.2rem;">✅</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <h3 style="margin-bottom: 20px; display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 1.5rem;">📊</span>
+            Métricas Gerais
+          </h3>
+          <div style="display: flex; flex-direction: column; gap: 16px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px; background: var(--bg-primary); border-radius: 8px;">
+              <span style="font-weight: 600;">Pendências Abertas</span>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="badge badge-high" style="font-size: 0.75rem;">1</span>
+                <span class="badge badge-medium" style="font-size: 0.75rem;">5</span>
+                <span class="badge badge-low" style="font-size: 0.75rem;">6</span>
+              </div>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px; background: var(--bg-primary); border-radius: 8px;">
+              <span style="font-weight: 600;">Linhas de Código</span>
+              <code style="font-size: 0.9rem;">~3000</code>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px; background: var(--bg-primary); border-radius: 8px;">
+              <span style="font-weight: 600;">Migrations SQL</span>
+              <code style="font-size: 0.9rem;">7</code>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px; background: var(--bg-primary); border-radius: 8px;">
+              <span style="font-weight: 600;">Políticas RLS</span>
+              <code style="font-size: 0.9rem;">~10</code>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-header">
+        <div class="section-title">
+          <span class="section-icon">📝</span>
+          <h2>Última Sessão</h2>
+        </div>
+        <p class="section-description">2026-10-01 — Atividade de desenvolvimento mais recente</p>
+      </div>
+      <div class="grid grid-2">
+        <div class="card">
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--border);">
+            <span style="font-size: 2rem;">🔧</span>
+            <div>
+              <h3 style="margin-bottom: 4px;">Fix: status_confirmacao</h3>
+              <div style="font-size: 0.85rem; color: var(--text-secondary);">Bug corrigido no acompanhamento público</div>
+            </div>
+          </div>
+          <div style="background: var(--bg-primary); padding: 16px; border-radius: 8px; border-left: 4px solid var(--rose);">
+            <div style="font-weight: 600; margin-bottom: 8px; color: var(--rose);">Problema</div>
+            <p style="font-size: 0.9rem; color: var(--text-secondary); line-height: 1.6; margin-bottom: 12px;">
+              Cliente via <code>/acompanhar/[token]</code> sempre via "Aguardando confirmação", mesmo após admin aprovar.
+            </p>
+            <div style="font-weight: 600; margin-bottom: 8px; color: var(--rose);">Causa</div>
+            <p style="font-size: 0.9rem; color: var(--text-secondary); line-height: 1.6;">
+              RPC <code>fn_buscar_atendimento_publico</code> não retorna o campo <code>status_confirmacao</code>.
+            </p>
+          </div>
+        </div>
+        <div class="card">
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--border);">
+            <span style="font-size: 2rem;">✅</span>
+            <div>
+              <h3 style="margin-bottom: 4px;">Solução Aplicada</h3>
+              <div style="font-size: 0.85rem; color: var(--text-secondary);">Workaround implementado</div>
+            </div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 12px;">
+            <div style="padding: 12px; background: var(--bg-primary); border-radius: 8px;">
+              <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 4px;">1. Adicionado estado</div>
+              <code style="font-size: 0.8rem; color: var(--text-secondary);">useState&lt;string | null&gt;(null)</code>
+            </div>
+            <div style="padding: 12px; background: var(--bg-primary); border-radius: 8px;">
+              <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 4px;">2. Busca secundária via RLS</div>
+              <code style="font-size: 0.8rem; color: var(--text-secondary);">.eq('token_acesso', token)</code>
+            </div>
+            <div style="padding: 12px; background: var(--bg-primary); border-radius: 8px;">
+              <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 4px;">3. Resolução de status</div>
+              <code style="font-size: 0.8rem; color: var(--text-secondary);">statusConfirmacao ?? status</code>
+            </div>
+            <div style="padding: 12px; background: var(--bg-primary); border-radius: 8px;">
+              <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 4px;">4. Fix warning TypeScript</div>
+              <code style="font-size: 0.8rem; color: var(--text-secondary);">(payload) => (_payload)</code>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top: 24px;">
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">
+          <span style="font-size: 1.5rem;">📁</span>
+          <h3>Arquivos Modificados</h3>
+        </div>
+        <div style="overflow-x: auto;">
+          <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
+            <thead>
+              <tr style="border-bottom: 2px solid var(--border);">
+                <th style="text-align: left; padding: 12px; font-weight: 600;">Arquivo</th>
+                <th style="text-align: left; padding: 12px; font-weight: 600;">Tipo</th>
+                <th style="text-align: left; padding: 12px; font-weight: 600;">Mudanças</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding: 12px;"><code style="font-size: 0.85rem;">src/app/acompanhar/[token]/page.tsx</code></td>
+                <td style="padding: 12px;"><span class="badge badge-medium" style="font-size: 0.7rem;">Modificação</span></td>
+                <td style="padding: 12px; color: var(--text-secondary);">+23 linhas (estado, busca, lógica)</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="grid grid-2" style="margin-top: 24px;">
+        <div class="card">
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+            <span style="font-size: 1.5rem;">🧪</span>
+            <h3>Testes Executados</h3>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 12px;">
+            <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--bg-primary); border-radius: 8px;">
+              <span style="font-size: 1.2rem;">✅</span>
+              <div>
+                <div style="font-weight: 600;">TypeScript compila sem erros</div>
+                <code style="font-size: 0.8rem; color: var(--text-secondary);">npx tsc --noEmit → 0 erros</code>
+              </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--bg-primary); border-radius: 8px;">
+              <span style="font-size: 1.2rem;">⚠️</span>
+              <div>
+                <div style="font-weight: 600;">Teste manual pendente</div>
+                <div style="font-size: 0.85rem; color: var(--text-secondary);">Requer ambiente Supabase configurado</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+            <span style="font-size: 1.5rem;">🎯</span>
+            <h3>Próximo Passo</h3>
+          </div>
+          <div style="background: linear-gradient(135deg, rgba(232, 180, 168, 0.15) 0%, rgba(232, 180, 168, 0.05) 100%); padding: 20px; border-radius: 12px; border-left: 4px solid var(--rose);">
+            <div style="font-weight: 700; font-size: 1.05rem; margin-bottom: 8px;">Opção 2 (Recomendada)</div>
+            <p style="font-size: 0.95rem; margin-bottom: 12px; line-height: 1.6;">
+              Melhorar contador do dashboard
+            </p>
+            <div style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.6;">
+              <div style="margin-bottom: 4px;">📁 <strong>Arquivo:</strong> <code>src/app/admin/page.tsx:99</code></div>
+              <div style="margin-bottom: 4px;">🎯 <strong>Objetivo:</strong> Padronizar contagem de pendentes</div>
+              <div style="margin-bottom: 4px;">⏱️ <strong>Tempo:</strong> 20 minutos</div>
+              <div>✅ <strong>Vantagem:</strong> Não requer migration</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" style="margin-top: 48px;">
+      <div class="section-header">
+        <div class="section-title">
+          <span class="section-icon">🧠</span>
+          <h2>Cérebro do Projeto Criado</h2>
+        </div>
+        <p class="section-description">Sistema de documentação completo para IAs</p>
+      </div>
+      <div class="card">
+        <div style="background: var(--bg-primary); padding: 20px; border-radius: 12px; border-left: 4px solid var(--rose); margin-bottom: 20px;">
+          <div style="font-weight: 700; font-size: 1.1rem; margin-bottom: 8px;">✅ Objetivo Alcançado</div>
+          <p style="color: var(--text-secondary); line-height: 1.7;">
+            Sistema de documentação completo: 7 arquivos (~62 KB) organizados em <code>docs/ia/</code> para qualquer IA que trabalhar no código.
+          </p>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+          <div style="padding: 16px; background: var(--bg-primary); border-radius: 8px; text-align: center;">
+            <div style="font-size: 2rem; margin-bottom: 8px;">📚</div>
+            <div style="font-weight: 600; margin-bottom: 4px;">7 arquivos</div>
+            <div style="font-size: 0.85rem; color: var(--text-secondary);">~62 KB total</div>
+          </div>
+          <div style="padding: 16px; background: var(--bg-primary); border-radius: 8px; text-align: center;">
+            <div style="font-size: 2rem; margin-bottom: 8px;">🏗️</div>
+            <div style="font-weight: 600; margin-bottom: 4px;">Arquitetura</div>
+            <div style="font-size: 0.85rem; color: var(--text-secondary);">Completa</div>
+          </div>
+          <div style="padding: 16px; background: var(--bg-primary); border-radius: 8px; text-align: center;">
+            <div style="font-size: 2rem; margin-bottom: 8px;">📋</div>
+            <div style="font-weight: 600; margin-bottom: 4px;">Decisões</div>
+            <div style="font-size: 0.85rem; color: var(--text-secondary);">Documentadas</div>
+          </div>
+          <div style="padding: 16px; background: var(--bg-primary); border-radius: 8px; text-align: center;">
+            <div style="font-size: 2rem; margin-bottom: 8px;">✅</div>
+            <div style="font-weight: 600; margin-bottom: 4px;">Zero código</div>
+            <div style="font-size: 0.85rem; color: var(--text-secondary);">alterado</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-header">
+        <div class="section-title">
+          <span class="section-icon">🎯</span>
+          <h2>Objetivo do Sistema</h2>
+        </div>
+      </div>
+      <div class="card">
+        <p style="font-size: 1.05rem; line-height: 1.7; margin-bottom: 16px;">
+          Sistema de gestão de salão de beleza para <strong>Inácia</strong> (profissional autônoma). Permite que clientes agendem horários online e acompanhem o atendimento em tempo real, enquanto a Inácia gerencia tudo pelo painel admin.
+        </p>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; margin-top: 20px;">
+          <div style="padding: 16px; background: var(--bg-primary); border-radius: 12px;">
+            <div style="font-size: 1.5rem; margin-bottom: 8px;">📅</div>
+            <div style="color: var(--rose); font-weight: 700; margin-bottom: 4px;">Agendamento</div>
+            <div style="font-size: 0.9rem; color: var(--text-secondary);">Cliente escolhe data/hora online, Inácia aprova ou recusa</div>
+          </div>
+          <div style="padding: 16px; background: var(--bg-primary); border-radius: 12px;">
+            <div style="font-size: 1.5rem; margin-bottom: 8px;">👥</div>
+            <div style="color: var(--rose); font-weight: 700; margin-bottom: 4px;">Fila Presencial</div>
+            <div style="font-size: 0.9rem; color: var(--text-secondary);">Cliente entra presencialmente, ordem por chegada</div>
+          </div>
+          <div style="padding: 16px; background: var(--bg-primary); border-radius: 12px;">
+            <div style="font-size: 1.5rem; margin-bottom: 8px;">🔴</div>
+            <div style="color: var(--rose); font-weight: 700; margin-bottom: 4px;">Acompanhamento Real-time</div>
+            <div style="font-size: 0.9rem; color: var(--text-secondary);">Token único, status atualiza automaticamente</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-header">
+        <div class="section-title">
+          <span class="section-icon">⚙️</span>
+          <h2>Stack Tecnológica</h2>
+        </div>
+      </div>
+      <div class="card">
+        <div class="tech-stack">
+          <div class="tech-item">
+            <span class="tech-label">Framework:</span>
+            <code class="tech-value">Next.js 16.3.4</code>
+          </div>
+          <div class="tech-item">
+            <span class="tech-label">UI:</span>
+            <code class="tech-value">React 19.2.8</code>
+          </div>
+          <div class="tech-item">
+            <span class="tech-label">Linguagem:</span>
+            <code class="tech-value">TypeScript (strict)</code>
+          </div>
+          <div class="tech-item">
+            <span class="tech-label">Estilo:</span>
+            <code class="tech-value">Tailwind CSS</code>
+          </div>
+          <div class="tech-item">
+            <span class="tech-label">Banco:</span>
+            <code class="tech-value">Supabase (PostgreSQL)</code>
+          </div>
+          <div class="tech-item">
+            <span class="tech-label">Auth:</span>
+            <code class="tech-value">Supabase Auth</code>
+          </div>
+          <div class="tech-item">
+            <span class="tech-label">Realtime:</span>
+            <code class="tech-value">Supabase Realtime</code>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-header">
+        <div class="section-title">
+          <span class="section-icon">🔄</span>
+          <h2>O Que Funciona</h2>
+        </div>
+      </div>
+      <div class="grid grid-2">
+        <div class="card">
+          <h3 style="margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+            <span class="status-indicator status-ok"></span>
+            Fluxo do Cliente
+          </h3>
+          <ul style="list-style: none; display: flex; flex-direction: column; gap: 8px;">
+            <li>✅ Formulário de agendamento</li>
+            <li>✅ Validação de horários</li>
+            <li>✅ Token de acompanhamento</li>
+            <li>✅ Realtime funcionando</li>
+            <li>✅ Fix: status_confirmacao</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3 style="margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+            <span class="status-indicator status-ok"></span>
+            Fluxo Admin
+          </h3>
+          <ul style="list-style: none; display: flex; flex-direction: column; gap: 8px;">
+            <li>✅ Dashboard completo</li>
+            <li>✅ Aprovar/recusar agendamentos</li>
+            <li>✅ Gestão de atendimentos</li>
+            <li>✅ CRUD clientes</li>
+            <li>✅ CRUD procedimentos</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="tab-content" id="pending-tab" hidden>
+    <section class="section">
+      <div class="section-header">
+        <div class="section-title">
+          <span class="section-icon">📋</span>
+          <h2>Pendências</h2>
+        </div>
+        <p class="section-description">12 tarefas organizadas por prioridade</p>
+      </div>
+      <div class="filter-group">
+        <button class="filter-btn active" data-filter="all">Todas (12)</button>
+        <button class="filter-btn" data-filter="high">🔴 Alta (1)</button>
+        <button class="filter-btn" data-filter="medium">🟡 Média (5)</button>
+        <button class="filter-btn" data-filter="low">🟢 Baixa (6)</button>
+      </div>
+      <div class="task-list" id="tasks-container">
+        <div class="task-item" data-priority="high">
+          <div class="task-header">
+            <div class="task-title">1. Atualizar RPC para retornar status_confirmacao</div>
+            <span class="badge badge-high">🔴 Alta</span>
+          </div>
+          <div class="task-description">
+            RPC não retorna o campo status_confirmacao. Workaround implementado, mas ideal é incluir na RPC.
+          </div>
+          <div class="task-meta">
+            <span>⏱️ <strong>30 min</strong></span>
+            <span>🚫 <strong>Requer migration</strong></span>
+          </div>
+        </div>
+
+        <div class="task-item" data-priority="medium">
+          <div class="task-header">
+            <div class="task-title">2. Contador do menu lateral divergente</div>
+            <span class="badge badge-medium">🟡 Média</span>
+          </div>
+          <div class="task-description">
+            Badge mostra número diferente da página de solicitações. Causa confusão visual.
+          </div>
+          <div class="task-meta">
+            <span>⏱️ <strong>30 min</strong></span>
+          </div>
+        </div>
+
+        <div class="task-item" data-priority="medium">
+          <div class="task-header">
+            <div class="task-title">3. Filtrar próximo atendimento por status_confirmacao</div>
+            <span class="badge badge-medium">🟡 Média</span>
+          </div>
+          <div class="task-description">
+            Widget pode sugerir agendamentos pendentes de aprovação.
+          </div>
+          <div class="task-meta">
+            <span>⏱️ <strong>15 min</strong></span>
+          </div>
+        </div>
+
+        <div class="task-item" data-priority="medium">
+          <div class="task-header">
+            <div class="task-title">4. Atendimentos passados permanecendo aguardando</div>
+            <span class="badge badge-medium">🟡 Média</span>
+          </div>
+          <div class="task-description">
+            Horários passados poluem lista de atendimentos ativos.
+          </div>
+          <div class="task-meta">
+            <span>⏱️ <strong>2-4 horas</strong></span>
+          </div>
+        </div>
+
+        <div class="task-item" data-priority="medium">
+          <div class="task-header">
+            <div class="task-title">5. Padronizar contador dashboard</div>
+            <span class="badge badge-medium">🟡 Média</span>
+          </div>
+          <div class="task-description">
+            Lógica mista confunde admin.
+          </div>
+          <div class="task-meta">
+            <span>⏱️ <strong>20 min</strong></span>
+          </div>
+        </div>
+
+        <div class="task-item" data-priority="medium">
+          <div class="task-header">
+            <div class="task-title">6. Consolidar docs/migracoes-mvp-rls.sql</div>
+            <span class="badge badge-medium">🟡 Média</span>
+          </div>
+          <div class="task-description">
+            DDL fora de migrations/, não aplicado automaticamente.
+          </div>
+          <div class="task-meta">
+            <span>⏱️ <strong>30 min</strong></span>
+          </div>
+        </div>
+
+        <div class="task-item" data-priority="low">
+          <div class="task-header">
+            <div class="task-title">7. Adicionar testes E2E</div>
+            <span class="badge badge-low">🟢 Baixa</span>
+          </div>
+          <div class="task-description">
+            Sistema sem testes automatizados. Sugestão: Playwright.
+          </div>
+          <div class="task-meta">
+            <span>⏱️ <strong>4 horas</strong></span>
+          </div>
+        </div>
+
+        <div class="task-item" data-priority="low">
+          <div class="task-header">
+            <div class="task-title">8. Melhorar tratamento de erros</div>
+            <span class="badge badge-low">🟢 Baixa</span>
+          </div>
+          <div class="task-description">
+            Diferenciar tipos de erro na página de acompanhamento.
+          </div>
+          <div class="task-meta">
+            <span>⏱️ <strong>1 hora</strong></span>
+          </div>
+        </div>
+
+        <div class="task-item" data-priority="low">
+          <div class="task-header">
+            <div class="task-title">9. Loading skeleton</div>
+            <span class="badge badge-low">🟢 Baixa</span>
+          </div>
+          <div class="task-description">
+            Substituir spinner por cards pulsantes.
+          </div>
+          <div class="task-meta">
+            <span>⏱️ <strong>1 hora</strong></span>
+          </div>
+        </div>
+
+        <div class="task-item" data-priority="low">
+          <div class="task-header">
+            <div class="task-title">10. Notificação push/WhatsApp</div>
+            <span class="badge badge-low">🟢 Baixa</span>
+          </div>
+          <div class="task-description">
+            Cliente descobre aprovação apenas se abrir página.
+          </div>
+          <div class="task-meta">
+            <span>⏱️ <strong>4+ horas</strong></span>
+          </div>
+        </div>
+
+        <div class="task-item" data-priority="low">
+          <div class="task-header">
+            <div class="task-title">11. Exportar relatórios CSV/PDF</div>
+            <span class="badge badge-low">🟢 Baixa</span>
+          </div>
+          <div class="task-description">
+            Admin pode querer exportar lista para análise externa.
+          </div>
+          <div class="task-meta">
+            <span>⏱️ <strong>3 horas</strong></span>
+          </div>
+        </div>
+
+        <div class="task-item" data-priority="low">
+          <div class="task-header">
+            <div class="task-title">12. Campo "observações"</div>
+            <span class="badge badge-low">🟢 Baixa</span>
+          </div>
+          <div class="task-description">
+            Admin anotar observações internas sobre atendimento.
+          </div>
+          <div class="task-meta">
+            <span>⏱️ <strong>2 horas</strong></span>
+            <span>🚫 <strong>Requer migration</strong></span>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="tab-content" id="docs-tab" hidden>
+    <section class="section">
+      <div class="section-header">
+        <div class="section-title">
+          <span class="section-icon">🧠</span>
+          <h2>Central de Conhecimento</h2>
+        </div>
+        <p class="section-description">Cérebro do projeto em docs/ia/ (~62 KB) • Última atualização: <strong>01/10/2026</strong></p>
+      </div>
+      <div class="card" style="margin-bottom: 24px;">
+        <div style="background: linear-gradient(135deg, rgba(232, 180, 168, 0.15) 0%, rgba(232, 180, 168, 0.05) 100%); padding: 24px; border-radius: 12px; border-left: 4px solid var(--rose);">
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+            <span style="font-size: 2rem;">🧠</span>
+            <div>
+              <div style="font-weight: 700; font-size: 1.2rem; margin-bottom: 4px;">Central de Conhecimento</div>
+              <div style="font-size: 0.85rem; color: var(--text-secondary);">Acesso direto ao cérebro do projeto</div>
+            </div>
+          </div>
+          <p style="color: var(--text-secondary); line-height: 1.7; margin-bottom: 16px;">
+            7 arquivos criados especificamente para qualquer IA que trabalhe no código. Toda arquitetura, decisões e estado atual documentados.
+          </p>
+          <div style="display: flex; align-items: center; gap: 8px; padding: 12px; background: var(--bg-secondary); border-radius: 8px;">
+            <span style="font-size: 1rem;">📅</span>
+            <span style="font-size: 0.9rem; color: var(--text-secondary);">Última atualização:</span>
+            <strong style="font-size: 0.9rem;">01/10/2026</strong>
+          </div>
+        </div>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px;">
+        <a href="ia/00-MEMORIA-PRINCIPAL.md" class="card" style="text-decoration: none; color: inherit; transition: all 0.2s; cursor: pointer; display: block;">
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+            <div style="width: 48px; height: 48px; background: var(--bg-primary); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">📖</div>
+            <div style="flex: 1;">
+              <div style="font-weight: 700; margin-bottom: 2px;">Memória Principal</div>
+              <div style="font-size: 0.8rem; color: var(--text-secondary);">12.6 KB</div>
+            </div>
+          </div>
+          <div style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5;">
+            Arquitetura completa, stack, modelo de dados, fluxos e regras de negócio
+          </div>
+          <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); font-size: 0.8rem; color: var(--rose); font-weight: 600;">
+            📍 Leia PRIMEIRO
+          </div>
+        </a>
+
+        <a href="ia/01-REGRAS-PARA-IA.md" class="card" style="text-decoration: none; color: inherit; transition: all 0.2s; cursor: pointer; display: block;">
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+            <div style="width: 48px; height: 48px; background: var(--bg-primary); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">⚠️</div>
+            <div style="flex: 1;">
+              <div style="font-weight: 700; margin-bottom: 2px;">Regras para IA</div>
+              <div style="font-size: 0.8rem; color: var(--text-secondary);">5.7 KB</div>
+            </div>
+          </div>
+          <div style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5;">
+            Regras obrigatórias: não alterar banco sem permissão, mudanças cirúrgicas
+          </div>
+          <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); font-size: 0.8rem; color: var(--rose); font-weight: 600;">
+            📍 Leia SEGUNDO
+          </div>
+        </a>
+
+        <a href="ia/02-DECISOES-E-HISTORICO.md" class="card" style="text-decoration: none; color: inherit; transition: all 0.2s; cursor: pointer; display: block;">
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+            <div style="width: 48px; height: 48px; background: var(--bg-primary); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">📜</div>
+            <div style="flex: 1;">
+              <div style="font-weight: 700; margin-bottom: 2px;">Decisões e Histórico</div>
+              <div style="font-size: 0.8rem; color: var(--text-secondary);">11.7 KB</div>
+            </div>
+          </div>
+          <div style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5;">
+            Por que dois campos de status, token, RPC, Realtime, Server Actions
+          </div>
+        </a>
+
+        <a href="ia/03-ESTADO-ATUAL.md" class="card" style="text-decoration: none; color: inherit; transition: all 0.2s; cursor: pointer; display: block;">
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+            <div style="width: 48px; height: 48px; background: var(--bg-primary); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">✅</div>
+            <div style="flex: 1;">
+              <div style="font-weight: 700; margin-bottom: 2px;">Estado Atual</div>
+              <div style="font-size: 0.8rem; color: var(--text-secondary);">9.8 KB</div>
+            </div>
+          </div>
+          <div style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5;">
+            O que funciona, limitações conhecidas, problemas não bloqueantes
+          </div>
+          <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); font-size: 0.8rem; color: var(--rose); font-weight: 600;">
+            📍 Leia TERCEIRO
+          </div>
+        </a>
+
+        <a href="ia/04-PENDENCIAS.md" class="card" style="text-decoration: none; color: inherit; transition: all 0.2s; cursor: pointer; display: block;">
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+            <div style="width: 48px; height: 48px; background: var(--bg-primary); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">📋</div>
+            <div style="flex: 1;">
+              <div style="font-weight: 700; margin-bottom: 2px;">Pendências</div>
+              <div style="font-size: 0.8rem; color: var(--text-secondary);">8.0 KB</div>
+            </div>
+          </div>
+          <div style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5;">
+            12 tarefas por prioridade (alta/média/baixa) com estimativas
+          </div>
+        </a>
+
+        <a href="ia/05-ULTIMA-SESSAO.md" class="card" style="text-decoration: none; color: inherit; transition: all 0.2s; cursor: pointer; display: block;">
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+            <div style="width: 48px; height: 48px; background: var(--bg-primary); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">📝</div>
+            <div style="flex: 1;">
+              <div style="font-weight: 700; margin-bottom: 2px;">Última Sessão</div>
+              <div style="font-size: 0.8rem; color: var(--text-secondary);">6.1 KB</div>
+            </div>
+          </div>
+          <div style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5;">
+            Diário de desenvolvimento: contexto, solução, testes, próximo passo
+          </div>
+        </a>
+
+        <a href="ia/06-COMANDO-INICIAL-IA.md" class="card" style="text-decoration: none; color: inherit; transition: all 0.2s; cursor: pointer; display: block;">
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+            <div style="width: 48px; height: 48px; background: var(--bg-primary); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">🚀</div>
+            <div style="flex: 1;">
+              <div style="font-weight: 700; margin-bottom: 2px;">Comando Inicial IA</div>
+              <div style="font-size: 0.8rem; color: var(--text-secondary);">8.6 KB</div>
+            </div>
+          </div>
+          <div style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5;">
+            Prompt padrão, comandos úteis, FAQ, boas práticas
+          </div>
+        </a>
+      </div>
+
+      <div class="card" style="margin-top: 24px;">
+        <div class="grid grid-2">
+        <div class="card">
+          <h3 style="margin-bottom: 16px;">⚡ Comandos Úteis</h3>
+          <div style="font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; line-height: 2;">
+            <div>npm run dev</div>
+            <div>npx tsc --noEmit</div>
+            <div>npm run build</div>
+            <div>npx supabase db push</div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<footer>
+  <div style="padding: 24px 0; border-top: 1px solid var(--border); margin-top: 48px;">
+    <div style="text-align: center; margin-bottom: 16px;">
+      <div style="font-size: 2rem; margin-bottom: 8px;">✂️</div>
+      <p style="font-weight: 600; margin-bottom: 4px;">Dashboard Executivo — Sistema Salão da Inácia</p>
+      <p style="font-size: 0.85rem; color: var(--text-secondary);">
+        Painel de Comando do Desenvolvimento • Atualizado em <strong>01/10/2026</strong>
+      </p>
+    </div>
+    <div style="display: flex; justify-content: center; gap: 16px; flex-wrap: wrap; font-size: 0.85rem; color: var(--text-secondary);">
+      <span>Next.js 16.3.4</span>
+      <span>•</span>
+      <span>React 19.2.8</span>
+      <span>•</span>
+      <span>TypeScript</span>
+      <span>•</span>
+      <span>Supabase</span>
+    </div>
+    <div style="text-align: center; margin-top: 16px; font-size: 0.8rem; color: var(--text-secondary);">
+      Conectado ao cérebro do projeto em <code>docs/ia/</code>
+    </div>
+  </div>
+</footer>
+</div>
+
+<script>
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    document.querySelectorAll('.tab-content').forEach(content => {
+      content.hidden = content.id !== `${tab.dataset.tab}-tab`;
+    });
+  });
+});
+
+document.querySelectorAll('.filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const filter = btn.dataset.filter;
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.task-item').forEach(task => {
+      task.hidden = filter !== 'all' && filter !== task.dataset.priority;
+    });
+  });
+});
+</script>
+</body>
+</html>
