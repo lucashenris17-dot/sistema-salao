@@ -1,0 +1,1273 @@
+<title>Dashboard — Sistema Salão da Inácia</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<style>
+:root {
+  --carbon: #1A1A1A;
+  --rose: #E8B4A8;
+  --slate: #2D2D2D;
+  --taupe: #A89B8C;
+  --linen: #F8F6F3;
+  --sky: #0EA5E9;
+  --emerald: #10B981;
+  --amber: #F59E0B;
+  --red: #EF4444;
+
+  --bg-primary: var(--linen);
+  --bg-secondary: #FFFFFF;
+  --bg-elevated: var(--slate);
+  --text-primary: var(--carbon);
+  --text-secondary: var(--taupe);
+  --text-inverse: var(--linen);
+  --border: rgba(26, 26, 26, 0.1);
+  --shadow: rgba(26, 26, 26, 0.08);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg-primary: #0F0F0F;
+    --bg-secondary: #1A1A1A;
+    --bg-elevated: #2D2D2D;
+    --text-primary: #F8F6F3;
+    --text-secondary: #A89B8C;
+    --text-inverse: #1A1A1A;
+    --border: rgba(248, 246, 243, 0.1);
+    --shadow: rgba(0, 0, 0, 0.3);
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg-primary: #0F0F0F;
+  --bg-secondary: #1A1A1A;
+  --bg-elevated: #2D2D2D;
+  --text-primary: #F8F6F3;
+  --text-secondary: #A89B8C;
+  --text-inverse: #1A1A1A;
+  --border: rgba(248, 246, 243, 0.1);
+  --shadow: rgba(0, 0, 0, 0.3);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-weight: 700;
+  text-wrap: balance;
+  line-height: 1.2;
+}
+
+h1 {
+  font-size: clamp(2rem, 5vw, 2.75rem);
+  letter-spacing: -0.02em;
+}
+
+h2 {
+  font-size: 1.75rem;
+  letter-spacing: -0.01em;
+}
+
+h3 {
+  font-size: 1.25rem;
+}
+
+code, .mono {
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  font-size: 0.9em;
+}
+
+.container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+header {
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  padding: 24px 0;
+  position: sticky;
+  top: env(safe-area-inset-top, 0px);
+  z-index: 100;
+  backdrop-filter: blur(10px);
+}
+
+.header-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logo {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.brand-text h1 {
+  font-size: 1.5rem;
+  margin-bottom: 2px;
+}
+
+.brand-subtitle {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tab {
+  padding: 8px 16px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 8px;
+  font-weight: 500;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+}
+
+.tab:hover {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.tab.active {
+  background: var(--rose);
+  color: var(--text-inverse);
+}
+
+main {
+  padding: 40px 0 80px;
+}
+
+.section {
+  margin-bottom: 48px;
+}
+
+.section-header {
+  margin-bottom: 24px;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.section-icon {
+  font-size: 1.5rem;
+}
+
+.section-description {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+}
+
+.card {
+  background: var(--bg-secondary);
+  border-radius: 16px;
+  padding: 24px;
+  border: 1px solid var(--border);
+  box-shadow: 0 2px 8px var(--shadow);
+}
+
+.grid {
+  display: grid;
+  gap: 24px;
+}
+
+.grid-2 {
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+}
+
+.grid-3 {
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+}
+
+.stat-card {
+  text-align: center;
+  padding: 32px 24px;
+}
+
+.stat-value {
+  font-size: 3rem;
+  font-weight: 700;
+  font-family: 'Playfair Display', serif;
+  color: var(--rose);
+  line-height: 1;
+  margin-bottom: 8px;
+}
+
+.stat-label {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.badge-high {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--red);
+}
+
+.badge-medium {
+  background: rgba(245, 158, 11, 0.15);
+  color: var(--amber);
+}
+
+.badge-low {
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--emerald);
+}
+
+.badge-done {
+  background: rgba(168, 155, 140, 0.15);
+  color: var(--taupe);
+}
+
+.task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.task-item {
+  padding: 20px;
+  background: var(--bg-primary);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  transition: all 0.2s;
+}
+
+.task-item:hover {
+  border-color: var(--rose);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px var(--shadow);
+}
+
+.task-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.task-title {
+  font-weight: 600;
+  font-size: 1.05rem;
+  flex: 1;
+}
+
+.task-description {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  margin-bottom: 12px;
+  line-height: 1.5;
+}
+
+.task-meta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.task-meta code {
+  background: var(--bg-secondary);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+}
+
+.filter-group {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.filter-btn {
+  padding: 8px 16px;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.filter-btn:hover {
+  border-color: var(--rose);
+}
+
+.filter-btn.active {
+  background: var(--rose);
+  color: var(--text-inverse);
+  border-color: var(--rose);
+}
+
+.tech-stack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.tech-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--bg-primary);
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+
+.tech-label {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.tech-value {
+  font-weight: 600;
+}
+
+.link-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.link-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--bg-primary);
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--text-primary);
+  transition: all 0.2s;
+  border: 1px solid var(--border);
+}
+
+.link-item:hover {
+  border-color: var(--sky);
+  background: var(--bg-secondary);
+}
+
+.link-label {
+  font-weight: 500;
+}
+
+.link-path {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.status-indicator {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 8px;
+}
+
+.status-ok {
+  background: var(--emerald);
+}
+
+.status-warn {
+  background: var(--amber);
+}
+
+.status-error {
+  background: var(--red);
+}
+
+.collapsible-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+  padding: 16px;
+  margin: -16px -16px 16px;
+  border-radius: 12px;
+  transition: background 0.2s;
+}
+
+.collapsible-header:hover {
+  background: var(--bg-primary);
+}
+
+.collapse-icon {
+  font-size: 1.2rem;
+  transition: transform 0.3s;
+}
+
+.collapsible-header.collapsed .collapse-icon {
+  transform: rotate(-90deg);
+}
+
+.collapsible-content {
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+}
+
+.collapsible-content.collapsed {
+  max-height: 0;
+}
+
+footer {
+  text-align: center;
+  padding: 32px 0;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  border-top: 1px solid var(--border);
+}
+
+@media (max-width: 768px) {
+  .header-content {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .tabs {
+    width: 100%;
+  }
+
+  .tab {
+    flex: 1;
+    text-align: center;
+  }
+
+  .task-header {
+    flex-direction: column;
+  }
+
+  .link-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+</style>
+
+<header>
+  <div class="container header-content">
+    <div class="brand">
+      <div class="logo">✂️</div>
+      <div class="brand-text">
+        <h1>Sistema Salão da Inácia</h1>
+        <div class="brand-subtitle">Dashboard Executivo</div>
+      </div>
+    </div>
+    <nav class="tabs">
+      <button class="tab active" data-tab="overview">Visão Geral</button>
+      <button class="tab" data-tab="pending">Pendências</button>
+      <button class="tab" data-tab="architecture">Arquitetura</button>
+      <button class="tab" data-tab="docs">Documentação</button>
+    </nav>
+  </div>
+</header>
+
+<main class="container">
+  <!-- OVERVIEW TAB -->
+  <div class="tab-content" id="overview-tab">
+    <section class="section">
+      <div class="section-header">
+        <div class="section-title">
+          <span class="section-icon">📊</span>
+          <h2>Status do Projeto</h2>
+        </div>
+        <p class="section-description">Estado atual do sistema em tempo real</p>
+      </div>
+
+      <div class="grid grid-3">
+        <div class="card stat-card">
+          <div class="stat-value">✅</div>
+          <div class="stat-label">Build Passando</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-value">0</div>
+          <div class="stat-label">Erros TypeScript</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-value">12</div>
+          <div class="stat-label">Pendências Ativas</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-header">
+        <div class="section-title">
+          <span class="section-icon">🎯</span>
+          <h2>Objetivo do Sistema</h2>
+        </div>
+      </div>
+
+      <div class="card">
+        <p style="font-size: 1.05rem; line-height: 1.7; margin-bottom: 16px;">
+          Sistema de gestão de salão de beleza para <strong>Inácia</strong> (profissional autônoma). Permite que clientes agendem horários online e acompanhem o atendimento em tempo real, enquanto a Inácia gerencia tudo pelo painel admin.
+        </p>
+        <div style="display: flex; gap: 16px; flex-wrap: wrap; margin-top: 20px;">
+          <div style="flex: 1; min-width: 200px;">
+            <div style="color: var(--rose); font-weight: 700; margin-bottom: 4px;">Dois Modos</div>
+            <div style="font-size: 0.9rem; color: var(--text-secondary);">
+              <strong>Agendamento</strong> — cliente escolhe data/hora, Inácia aprova<br>
+              <strong>Fila</strong> — cliente entra presencialmente
+            </div>
+          </div>
+          <div style="flex: 1; min-width: 200px;">
+            <div style="color: var(--rose); font-weight: 700; margin-bottom: 4px;">Acompanhamento</div>
+            <div style="font-size: 0.9rem; color: var(--text-secondary);">
+              Cada atendimento tem token único<br>
+              Cliente vê status em tempo real
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-header">
+        <div class="section-title">
+          <span class="section-icon">⚙️</span>
+          <h2>Stack Tecnológica</h2>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="tech-stack">
+          <div class="tech-item">
+            <span class="tech-label">Framework:</span>
+            <code class="tech-value">Next.js 16.3.4</code>
+          </div>
+          <div class="tech-item">
+            <span class="tech-label">UI:</span>
+            <code class="tech-value">React 19.2.8</code>
+          </div>
+          <div class="tech-item">
+            <span class="tech-label">Linguagem:</span>
+            <code class="tech-value">TypeScript (strict)</code>
+          </div>
+          <div class="tech-item">
+            <span class="tech-label">Estilo:</span>
+            <code class="tech-value">Tailwind CSS</code>
+          </div>
+          <div class="tech-item">
+            <span class="tech-label">Banco:</span>
+            <code class="tech-value">Supabase (PostgreSQL)</code>
+          </div>
+          <div class="tech-item">
+            <span class="tech-label">Auth:</span>
+            <code class="tech-value">Supabase Auth</code>
+          </div>
+          <div class="tech-item">
+            <span class="tech-label">Realtime:</span>
+            <code class="tech-value">Supabase Realtime</code>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-header">
+        <div class="section-title">
+          <span class="section-icon">🔄</span>
+          <h2>O Que Funciona</h2>
+        </div>
+      </div>
+
+      <div class="grid grid-2">
+        <div class="card">
+          <h3 style="margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+            <span class="status-indicator status-ok"></span>
+            Fluxo do Cliente
+          </h3>
+          <ul style="list-style: none; display: flex; flex-direction: column; gap: 8px;">
+            <li>✅ Formulário de agendamento (4 etapas)</li>
+            <li>✅ Validação de horários</li>
+            <li>✅ Criação automática de cliente</li>
+            <li>✅ Token de acompanhamento</li>
+            <li>✅ Realtime funcionando</li>
+            <li>✅ Previsão de horário</li>
+            <li>✅ Fix aplicado: status_confirmacao</li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <h3 style="margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+            <span class="status-indicator status-ok"></span>
+            Fluxo Admin
+          </h3>
+          <ul style="list-style: none; display: flex; flex-direction: column; gap: 8px;">
+            <li>✅ Dashboard completo</li>
+            <li>✅ Aprovar/recusar agendamentos</li>
+            <li>✅ Gestão de atendimentos</li>
+            <li>✅ CRUD clientes</li>
+            <li>✅ CRUD procedimentos</li>
+            <li>✅ Bloqueios de agenda</li>
+            <li>✅ Logout funciona</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-header">
+        <div class="section-title">
+          <span class="section-icon">⚠️</span>
+          <h2>Limitações Conhecidas</h2>
+        </div>
+        <p class="section-description">Funcionando, mas com workarounds (não bloqueantes)</p>
+      </div>
+
+      <div class="task-list">
+        <div class="task-item">
+          <div class="task-header">
+            <div class="task-title">🟡 RPC não retorna status_confirmacao</div>
+            <span class="badge badge-medium">Workaround</span>
+          </div>
+          <div class="task-description">
+            RPC retorna dados principais, mas busca secundária necessária para pegar status_confirmacao. Funciona porque RLS permite SELECT com filtro token.
+          </div>
+          <div class="task-meta">
+            <span>Impacto: <strong>Mínimo</strong></span>
+            <span>Solução futura: <strong>Atualizar RPC (requer migration)</strong></span>
+          </div>
+        </div>
+
+        <div class="task-item">
+          <div class="task-header">
+            <div class="task-title">🟡 Widget próximo atendimento não filtra aprovação</div>
+            <span class="badge badge-medium">Baixo impacto</span>
+          </div>
+          <div class="task-description">
+            Pode sugerir agendamentos pendentes de aprovação. Admin vê visualmente na lista principal.
+          </div>
+          <div class="task-meta">
+            <span>Arquivo: <code>proximo-atendimento.tsx</code></span>
+          </div>
+        </div>
+
+        <div class="task-item">
+          <div class="task-header">
+            <div class="task-title">🟡 Contador dashboard usa lógica mista</div>
+            <span class="badge badge-medium">Confuso</span>
+          </div>
+          <div class="task-description">
+            Badge pode mostrar número diferente da página de solicitações.
+          </div>
+          <div class="task-meta">
+            <span>Arquivo: <code>src/app/admin/page.tsx:99</code></span>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- PENDING TAB -->
+  <div class="tab-content" id="pending-tab" hidden>
+    <section class="section">
+      <div class="section-header">
+        <div class="section-title">
+          <span class="section-icon">📋</span>
+          <h2>Pendências</h2>
+        </div>
+        <p class="section-description">Tarefas organizadas por prioridade</p>
+      </div>
+
+      <div class="filter-group">
+        <button class="filter-btn active" data-filter="all">Todas (12)</button>
+        <button class="filter-btn" data-filter="high">🔴 Alta (1)</button>
+        <button class="filter-btn" data-filter="medium">🟡 Média (5)</button>
+        <button class="filter-btn" data-filter="low">🟢 Baixa (6)</button>
+      </div>
+
+      <div class="task-list" id="tasks-container">
+        <!-- Alta Prioridade -->
+        <div class="task-item" data-priority="high">
+          <div class="task-header">
+            <div class="task-title">1. Atualizar RPC para retornar status_confirmacao</div>
+            <span class="badge badge-high">🔴 Alta</span>
+          </div>
+          <div class="task-description">
+            Atualmente a RPC não retorna o campo status_confirmacao. Há um workaround (busca secundária), mas o ideal é incluir na RPC nativamente.
+          </div>
+          <div class="task-meta">
+            <span>📊 Impacto: <strong>Duas queries em vez de uma</strong></span>
+            <span>⏱️ Estimativa: <strong>30 min</strong></span>
+            <span>🚫 Bloqueio: <strong>Requer migration</strong></span>
+          </div>
+        </div>
+
+        <!-- Média Prioridade -->
+        <div class="task-item" data-priority="medium">
+          <div class="task-header">
+            <div class="task-title">2. Contador do menu lateral divergente</div>
+            <span class="badge badge-medium">🟡 Média</span>
+          </div>
+          <div class="task-description">
+            Badge do contador no menu lateral mostra número diferente da página de solicitações. Causa confusão visual.
+          </div>
+          <div class="task-meta">
+            <span>📁 Arquivo: <code>src/app/admin/layout.tsx</code></span>
+            <span>⏱️ Estimativa: <strong>30 min</strong></span>
+          </div>
+        </div>
+
+        <div class="task-item" data-priority="medium">
+          <div class="task-header">
+            <div class="task-title">3. Filtrar próximo atendimento por status_confirmacao</div>
+            <span class="badge badge-medium">🟡 Média</span>
+          </div>
+          <div class="task-description">
+            Widget "Próximo atendimento" pode sugerir agendamentos pendentes de aprovação.
+          </div>
+          <div class="task-meta">
+            <span>📁 Arquivo: <code>proximo-atendimento.tsx</code></span>
+            <span>⏱️ Estimativa: <strong>15 min</strong></span>
+          </div>
+        </div>
+
+        <div class="task-item" data-priority="medium">
+          <div class="task-header">
+            <div class="task-title">4. Atendimentos passados permanecendo aguardando</div>
+            <span class="badge badge-medium">🟡 Média</span>
+          </div>
+          <div class="task-description">
+            Agendamentos cujo horário já passou permanecem com status aguardando, poluindo a lista de atendimentos ativos.
+          </div>
+          <div class="task-meta">
+            <span>💡 Soluções: <strong>3 opções (automática/manual/filtro)</strong></span>
+            <span>⏱️ Estimativa: <strong>2-4 horas</strong></span>
+          </div>
+        </div>
+
+        <div class="task-item" data-priority="medium">
+          <div class="task-header">
+            <div class="task-title">5. Padronizar contador de pendentes no dashboard</div>
+            <span class="badge badge-medium">🟡 Média</span>
+          </div>
+          <div class="task-description">
+            Lógica de contagem mistura status operacional com status de aprovação.
+          </div>
+          <div class="task-meta">
+            <span>📁 Arquivo: <code>src/app/admin/page.tsx:99</code></span>
+            <span>⏱️ Estimativa: <strong>20 min</strong></span>
+          </div>
+        </div>
+
+        <div class="task-item" data-priority="medium">
+          <div class="task-header">
+            <div class="task-title">6. Consolidar docs/migracoes-mvp-rls.sql</div>
+            <span class="badge badge-medium">🟡 Média</span>
+          </div>
+          <div class="task-description">
+            DDL importante está fora de supabase/migrations/, não aplicado automaticamente pelo CLI.
+          </div>
+          <div class="task-meta">
+            <span>⏱️ Estimativa: <strong>30 min</strong></span>
+            <span>🚫 Bloqueio: <strong>Requer migration</strong></span>
+          </div>
+        </div>
+
+        <!-- Baixa Prioridade -->
+        <div class="task-item" data-priority="low">
+          <div class="task-header">
+            <div class="task-title">7. Adicionar testes E2E</div>
+            <span class="badge badge-low">🟢 Baixa</span>
+          </div>
+          <div class="task-description">
+            Sistema não tem testes automatizados. Sugestão: Playwright com 5 casos principais.
+          </div>
+          <div class="task-meta">
+            <span>⏱️ Estimativa: <strong>4 horas</strong></span>
+          </div>
+        </div>
+
+        <div class="task-item" data-priority="low">
+          <div class="task-header">
+            <div class="task-title">8. Melhorar tratamento de erros</div>
+            <span class="badge badge-low">🟢 Baixa</span>
+          </div>
+          <div class="task-description">
+            Página de acompanhamento mostra mensagem genérica. Diferenciar tipos de erro (token inválido, rede, servidor).
+          </div>
+          <div class="task-meta">
+            <span>⏱️ Estimativa: <strong>1 hora</strong></span>
+          </div>
+        </div>
+
+        <div class="task-item" data-priority="low">
+          <div class="task-header">
+            <div class="task-title">9. Adicionar loading skeleton</div>
+            <span class="badge badge-low">🟢 Baixa</span>
+          </div>
+          <div class="task-description">
+            Substituir spinner por cards pulsantes na página de acompanhamento.
+          </div>
+          <div class="task-meta">
+            <span>⏱️ Estimativa: <strong>1 hora</strong></span>
+          </div>
+        </div>
+
+        <div class="task-item" data-priority="low">
+          <div class="task-header">
+            <div class="task-title">10. Notificação push/WhatsApp</div>
+            <span class="badge badge-low">🟢 Baixa</span>
+          </div>
+          <div class="task-description">
+            Cliente só descobre aprovação se abrir a página. Opções: WhatsApp Business, Web Push, E-mail.
+          </div>
+          <div class="task-meta">
+            <span>⏱️ Estimativa: <strong>4+ horas</strong></span>
+          </div>
+        </div>
+
+        <div class="task-item" data-priority="low">
+          <div class="task-header">
+            <div class="task-title">11. Exportar relatórios (CSV/PDF)</div>
+            <span class="badge badge-low">🟢 Baixa</span>
+          </div>
+          <div class="task-description">
+            Admin pode querer exportar lista de atendimentos para análise externa.
+          </div>
+          <div class="task-meta">
+            <span>⏱️ Estimativa: <strong>3 horas</strong></span>
+          </div>
+        </div>
+
+        <div class="task-item" data-priority="low">
+          <div class="task-header">
+            <div class="task-title">12. Campo "observações" em atendimento</div>
+            <span class="badge badge-low">🟢 Baixa</span>
+          </div>
+          <div class="task-description">
+            Admin pode querer anotar observações sobre um atendimento. Interno, não visível para cliente.
+          </div>
+          <div class="task-meta">
+            <span>⏱️ Estimativa: <strong>2 horas</strong></span>
+            <span>🚫 Bloqueio: <strong>Requer migration</strong></span>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ARCHITECTURE TAB -->
+  <div class="tab-content" id="architecture-tab" hidden>
+    <section class="section">
+      <div class="section-header">
+        <div class="section-title">
+          <span class="section-icon">🏗️</span>
+          <h2>Arquitetura do Sistema</h2>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom: 24px;">
+        <h3 style="margin-bottom: 16px;">🔑 Conceito Crítico: Dois Campos de Status</h3>
+        <div style="background: var(--bg-primary); padding: 20px; border-radius: 12px; border-left: 4px solid var(--rose);">
+          <div style="display: grid; gap: 20px;">
+            <div>
+              <div style="font-weight: 700; color: var(--rose); margin-bottom: 8px;">status (operacional)</div>
+              <div style="font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; line-height: 1.8;">
+                aguardando → em_andamento → pausado → finalizado/cancelado/no_show
+              </div>
+            </div>
+            <div>
+              <div style="font-weight: 700; color: var(--rose); margin-bottom: 8px;">status_confirmacao (aprovação)</div>
+              <div style="font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; line-height: 1.8;">
+                pendente → confirmado/recusado
+              </div>
+            </div>
+          </div>
+          <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); color: var(--text-secondary); font-size: 0.9rem;">
+            ⚠️ <strong>São ortogonais:</strong> Um atendimento pode estar "aguardando" (operacional) e "confirmado" (aprovado) ao mesmo tempo.
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-2">
+        <div class="card">
+          <h3 style="margin-bottom: 16px;">📊 Modelo de Dados</h3>
+          <div style="display: flex; flex-direction: column; gap: 16px;">
+            <div>
+              <div style="font-weight: 600; margin-bottom: 8px;">atendimentos</div>
+              <div style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.6;">
+                id, cliente_id, procedimento_id, modo, <strong>status</strong>, <strong>status_confirmacao</strong>, horario_agendado, ordem_fila, token_acesso, duracao_trabalhada_seg, pausado_desde
+              </div>
+            </div>
+            <div>
+              <div style="font-weight: 600; margin-bottom: 8px;">clientes</div>
+              <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                id, nome, sobrenome, whatsapp (UNIQUE)
+              </div>
+            </div>
+            <div>
+              <div style="font-weight: 600; margin-bottom: 8px;">procedimentos</div>
+              <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                id, nome, duracao_estimada_min, ativo
+              </div>
+            </div>
+            <div>
+              <div style="font-weight: 600; margin-bottom: 8px;">bloqueios_agenda</div>
+              <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                id, inicio, fim, motivo
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3 style="margin-bottom: 16px;">🔐 Segurança (RLS)</h3>
+          <div style="display: flex; flex-direction: column; gap: 12px; font-size: 0.9rem;">
+            <div style="padding: 12px; background: var(--bg-primary); border-radius: 8px;">
+              <div style="font-weight: 600; margin-bottom: 4px;">anon_atendimentos_select_proprio_token</div>
+              <div style="color: var(--text-secondary); font-size: 0.85rem;">
+                Anon pode SELECT em atendimentos filtrando por token_acesso
+              </div>
+            </div>
+            <div style="padding: 12px; background: var(--bg-primary); border-radius: 8px;">
+              <div style="font-weight: 600; margin-bottom: 4px;">anon_atendimentos_insert_pendente</div>
+              <div style="color: var(--text-secondary); font-size: 0.85rem;">
+                Anon pode INSERT com status_confirmacao = 'pendente'
+              </div>
+            </div>
+            <div style="padding: 12px; background: var(--bg-primary); border-radius: 8px;">
+              <div style="font-weight: 600; margin-bottom: 4px;">fn_buscar_atendimento_publico</div>
+              <div style="color: var(--text-secondary); font-size: 0.85rem;">
+                RPC SECURITY DEFINER — controla o que anon vê
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top: 24px;">
+        <h3 style="margin-bottom: 16px;">🔄 Fluxos Principais</h3>
+        <div class="grid grid-2">
+          <div>
+            <div style="font-weight: 700; color: var(--rose); margin-bottom: 12px;">Cliente (Agendamento)</div>
+            <ol style="line-height: 2; padding-left: 20px; font-size: 0.9rem;">
+              <li>Acessa <code>/agendar</code></li>
+              <li>Preenche 4 etapas</li>
+              <li>Sistema cria: <code>status='aguardando'</code>, <code>status_confirmacao='pendente'</code></li>
+              <li>Gera token único</li>
+              <li>Redireciona para <code>/acompanhar/[token]</code></li>
+              <li>Admin aprova → <code>status_confirmacao='confirmado'</code></li>
+              <li>Admin inicia → <code>status='em_andamento'</code></li>
+              <li>Admin finaliza → <code>status='finalizado'</code></li>
+            </ol>
+          </div>
+          <div>
+            <div style="font-weight: 700; color: var(--rose); margin-bottom: 12px;">Admin (Gestão)</div>
+            <ol style="line-height: 2; padding-left: 20px; font-size: 0.9rem;">
+              <li>Vê solicitações em <code>/admin/solicitacoes</code></li>
+              <li>Aprova: só muda <code>status_confirmacao</code></li>
+              <li>Recusa: <code>status='cancelado'</code> + <code>status_confirmacao='recusado'</code></li>
+              <li>Gerencia em <code>/admin/atendimentos</code></li>
+              <li>Iniciar/Pausar/Retomar/Finalizar</li>
+              <li>Cancelar/No-show</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top: 24px;">
+        <h3 style="margin-bottom: 16px;">🔧 Integrações Chave</h3>
+        <div style="display: grid; gap: 16px;">
+          <div style="padding: 16px; background: var(--bg-primary); border-radius: 12px;">
+            <div style="font-weight: 700; margin-bottom: 8px;">🔴 Supabase Realtime</div>
+            <div style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 8px;">
+              Página do cliente atualiza automaticamente via <code>postgres_changes</code> na tabela atendimentos
+            </div>
+            <div style="font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; background: var(--bg-secondary); padding: 12px; border-radius: 8px;">
+              supabase.channel('atendimento-atualizado')<br>
+              &nbsp;&nbsp;.on('postgres_changes', {...})<br>
+              &nbsp;&nbsp;.subscribe()
+            </div>
+          </div>
+          <div style="padding: 16px; background: var(--bg-primary); border-radius: 12px;">
+            <div style="font-weight: 700; margin-bottom: 8px;">📊 Algoritmo de Previsão</div>
+            <div style="font-size: 0.9rem; color: var(--text-secondary);">
+              <code>calcularPrevisao()</code> em <code>src/lib/previsao.ts</code> — calcula inicio_previsto, fim_previsto e minutos_restantes para cada atendimento na fila
+            </div>
+          </div>
+          <div style="padding: 16px; background: var(--bg-primary); border-radius: 12px;">
+            <div style="font-weight: 700; margin-bottom: 8px;">🔐 Token de Acompanhamento</div>
+            <div style="font-size: 0.9rem; color: var(--text-secondary);">
+              Token opaco gerado por <code>gerarTokenAcompanhamento()</code> — URL pública <code>/acompanhar/[token]</code> sem login
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- DOCS TAB -->
+  <div class="tab-content" id="docs-tab" hidden>
+    <section class="section">
+      <div class="section-header">
+        <div class="section-title">
+          <span class="section-icon">📚</span>
+          <h2>Documentação do Projeto</h2>
+        </div>
+        <p class="section-description">Sistema completo de documentação em <code>docs/ia/</code></p>
+      </div>
+
+      <div class="card" style="margin-bottom: 24px;">
+        <div style="background: var(--bg-primary); padding: 20px; border-radius: 12px; border-left: 4px solid var(--rose);">
+          <div style="font-weight: 700; font-size: 1.1rem; margin-bottom: 12px;">🧠 O "Cérebro do Projeto"</div>
+          <div style="color: var(--text-secondary); line-height: 1.7;">
+            Sistema de 7 arquivos (~62 KB) criado especificamente para qualquer IA que trabalhe no código. Contém toda a arquitetura, decisões, estado atual e pendências.
+          </div>
+        </div>
+      </div>
+
+      <div class="link-list">
+        <a href="#" class="link-item">
+          <div>
+            <div class="link-label">00 — Memória Principal</div>
+            <div class="link-path">docs/ia/00-MEMORIA-PRINCIPAL.md</div>
+          </div>
+          <div style="color: var(--text-secondary); font-size: 0.85rem;">12.6 KB</div>
+        </a>
+        <a href="#" class="link-item">
+          <div>
+            <div class="link-label">01 — Regras para IA</div>
+            <div class="link-path">docs/ia/01-REGRAS-PARA-IA.md</div>
+          </div>
+          <div style="color: var(--text-secondary); font-size: 0.85rem;">5.7 KB</div>
+        </a>
+        <a href="#" class="link-item">
+          <div>
+            <div class="link-label">02 — Decisões e Histórico</div>
+            <div class="link-path">docs/ia/02-DECISOES-E-HISTORICO.md</div>
+          </div>
+          <div style="color: var(--text-secondary); font-size: 0.85rem;">11.7 KB</div>
+        </a>
+        <a href="#" class="link-item">
+          <div>
+            <div class="link-label">03 — Estado Atual</div>
+            <div class="link-path">docs/ia/03-ESTADO-ATUAL.md</div>
+          </div>
+          <div style="color: var(--text-secondary); font-size: 0.85rem;">9.8 KB</div>
+        </a>
+        <a href="#" class="link-item">
+          <div>
+            <div class="link-label">04 — Pendências</div>
+            <div class="link-path">docs/ia/04-PENDENCIAS.md</div>
+          </div>
+          <div style="color: var(--text-secondary); font-size: 0.85rem;">8.0 KB</div>
+        </a>
+        <a href="#" class="link-item">
+          <div>
+            <div class="link-label">05 — Última Sessão</div>
+            <div class="link-path">docs/ia/05-ULTIMA-SESSAO.md</div>
+          </div>
+          <div style="color: var(--text-secondary); font-size: 0.85rem;">6.1 KB</div>
+        </a>
+        <a href="#" class="link-item">
+          <div>
+            <div class="link-label">06 — Comando Inicial IA</div>
+            <div class="link-path">docs/ia/06-COMANDO-INICIAL-IA.md</div>
+          </div>
+          <div style="color: var(--text-secondary); font-size: 0.85rem;">8.6 KB</div>
+        </a>
+      </div>
+
+      <div class="card" style="margin-top: 32px;">
+        <h3 style="margin-bottom: 20px;">📖 Conteúdo de Cada Arquivo</h3>
+        <div style="display: flex; flex-direction: column; gap: 20px;">
+          <div style="padding: 16px; background: var(--bg-primary); border-radius: 12px;">
+            <div style="font-weight: 700; margin-bottom: 8px;">00 — Memória Principal</div>
+            <div style="font-size: 0.9rem; color: var(--text-secondary);">
+              Arquitetura completa, stack, modelo de dados, fluxos cliente/admin, regras de negócio, estados do atendimento, integração Supabase, RLS, decisões arquiteturais, padrões visuais Tailwind
+            </div>
+          </div>
+          <div style="padding: 16px; background: var(--bg-primary); border-radius: 12px;">
+            <div style="font-weight: 700; margin-bottom: 8px;">01 — Regras para IA</div>
+            <div style="font-size: 0.9rem; color: var(--text-secondary);">
+              Regras obrigatórias: não alterar banco sem permissão, mudanças cirúrgicas, rodar tsc, atualizar documentação, perguntar quando em dúvida
+            </div>
+          </div>
+          <div style="padding: 16px; background: var(--bg-primary); border-radius: 12px;">
+            <div style="font-weight: 700; margin-bottom: 8px;">02 — Decisões e Histórico</div>
+            <div style="font-size: 0.9rem; color: var(--text-secondary);">
+              Por que dois campos de status, token de acompanhamento, RPC vs consulta direta, Realtime, Server Actions, problema da RPC, mudanças importantes com datas
+            </div>
+          </div>
+          <div style="padding: 16px; background: var(--bg-primary); border-radius: 12px;">
+            <div style="font-weight: 700; margin-bottom: 8px;">03 — Estado Atual</div>
+            <div style="font-size: 0.9rem; color: var(--text-secondary);">
+              O que funciona, limitações conhecidas, problemas não bloqueantes, checklist de saúde, testes manuais, estrutura de arquivos, próximos passos
+            </div>
+          </div>
+          <div style="padding: 16px; background: var(--bg-primary); border-radius: 12px;">
+            <div style="font-weight: 700; margin-bottom: 8px;">04 — Pendências</div>
+            <div style="font-size: 0.9rem; color: var(--text-secondary);">
+              12 tarefas organizadas por prioridade (alta/média/baixa) com descrição, impacto, solução, estimativa e bloqueios
+            </div>
+          </div>
+          <div style="padding: 16px; background: var(--bg-primary); border-radius: 12px;">
+            <div style="font-weight: 700; margin-bottom: 8px;">05 — Última Sessão</div>
+            <div style="font-size: 0.9rem; color: var(--text-secondary);">
+              Diário de desenvolvimento: contexto, problema, solução aplicada, testes, arquivos alterados, próximo passo, template para novas sessões
+            </div>
+          </div>
+          <div style="padding: 16px; background: var(--bg-primary); border-radius: 12px;">
+            <div style="font-weight: 700; margin-bottom: 8px;">06 — Comando Inicial IA</div>
+            <div style="font-size: 0.9rem; color: var(--text-secondary);">
+              Prompt padrão de inicialização, comandos úteis (dev/build/git/supabase), checklist, FAQ, atalhos de navegação, boas práticas, mensagens de erro comuns
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top: 24px;">
+        <h3 style="margin-bottom: 16px;">⚡ Comandos Úteis</h3>
+        <div style="display: grid; gap: 12px;">
+          <div style="padding: 16px; background: var(--bg-primary); border-radius: 8px;">
+            <div style="font-weight: 600; margin-bottom: 8px; color: var(--rose);">Desenvolvimento</div>
+            <div style="font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; line-height: 2;">
+              <div>npm install <span style="color: var(--text-secondary);"># Instalar dependências</span></div>
+              <div>npm run dev <span style="color: var(--text-secondary);"># Rodar em modo dev</span></div>
+              <div>npx tsc --noEmit <span style="color: var(--text-secondary);"># Verificar erros TypeScript</span></div>
+              <div>npm run build <span style="color: var(--text-secondary);"># Build de produção</span></div>
+            </div>
+          </div>
+          <div style="padding: 16px; background: var(--bg-primary); border-radius: 8px;">
+            <div style="font-weight: 600; margin-bottom: 8px; color: var(--rose);">Supabase</div>
+            <div style="font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; line-height: 2;">
+              <div>npx supabase start <span style="color: var(--text-secondary);"># Iniciar local</span></div>
+              <div>npx supabase db push <span style="color: var(--text-secondary);"># Aplicar migrations</span></div>
+              <div>npx supabase db reset <span style="color: var(--text-secondary);"># Resetar banco (CUIDADO)</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<footer>
+  <div class="container">
+    <p>Dashboard gerado em <strong>2026-10-01</strong> — Sistema Salão da Inácia</p>
+    <p style="margin-top: 8px; font-size: 0.85rem;">
+      Next.js 16.3.4 • React 19.2.8 • TypeScript • Supabase
+    </p>
+  </div>
+</footer>
+
+<script>
+// Tab navigation
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    const targetTab = tab.dataset.tab;
+
+    // Update active tab
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+
+    // Show/hide content
+    document.querySelectorAll('.tab-content').forEach(content => {
+      content.hidden = content.id !== `${targetTab}-tab`;
+    });
+  });
+});
+
+// Filter tasks by priority
+document.querySelectorAll('.filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const filter = btn.dataset.filter;
+
+    // Update active filter
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+
+    // Filter tasks
+    document.querySelectorAll('.task-item').forEach(task => {
+      const priority = task.dataset.priority;
+      task.hidden = filter !== 'all' && filter !== priority;
+    });
+  });
+});
+
+// Collapsible sections
+document.querySelectorAll('.collapsible-header').forEach(header => {
+  header.addEventListener('click', () => {
+    header.classList.toggle('collapsed');
+    const content = header.nextElementSibling;
+    content.classList.toggle('collapsed');
+  });
+});
+
+// Prevent default on link items (docs section)
+document.querySelectorAll('.link-item').forEach(link => {
+  link.addEventListener('click', (e) => {
+    e.preventDefault();
+    alert('Abra o arquivo no seu editor de código: ' + link.querySelector('.link-path').textContent);
+  });
+});
+</script>

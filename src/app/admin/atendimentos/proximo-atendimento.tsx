@@ -12,6 +12,7 @@ export function selecionarProximoAtendimento(
     .filter((atendimento) =>
       atendimento.status === 'aguardando' &&
       atendimento.modo === 'agendamento' &&
+      atendimento.status_confirmacao === 'confirmado' &&
       atendimento.horario_agendado &&
       new Date(atendimento.horario_agendado).getTime() > agora
     )

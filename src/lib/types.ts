@@ -104,6 +104,13 @@ export interface BloqueioAgenda {
   fim: string; // timestamptz (ISO string)
   descricao?: string | null;
   criado_em?: string;
+  // Campos de regra (post-migration 20261004)
+  tipo?: 'semanal_fixo' | 'temporario' | 'especifico' | null;
+  dias_semana?: number[] | null;
+  data_inicio?: string | null; // date (ISO)
+  data_fim?: string | null; // date (ISO)
+  hora_inicio?: string | null; // HH:MM
+  hora_fim?: string | null; // HH:MM
 }
 
 /**
@@ -149,8 +156,12 @@ export interface SolicitacaoAgendamentoResponse {
  * Dados para criar bloqueio de agenda
  */
 export interface BloqueioAgendaInput {
-  inicio: string; // ISO string (timestamptz)
-  fim: string; // ISO string (timestamptz)
+  tipo?: 'semanal_fixo' | 'temporario' | 'especifico';
+  dias_semana?: number[];
+  data_inicio?: string;
+  data_fim?: string;
+  hora_inicio?: string;
+  hora_fim?: string;
   descricao?: string;
 }
 
@@ -296,7 +307,7 @@ export function mascaraWhatsApp(valor: string): string {
   if (apenas.length <= 2) return `(${apenas}`;
   if (apenas.length <= 3) return `(${apenas.slice(0,2)}) ${apenas.slice(2)}`;
   if (apenas.length <= 7) return `(${apenas.slice(0,2)}) ${apenas.slice(2,3)} ${apenas.slice(3)}`;
-  return `(${apenas.slice(0,2)}) ${apenas.slice(2,3)} ${apenas.slice(3,7)}-${apenas.slice(7)}`;
+  return `${apenas}`.length >= 10 ? `(${apenas.slice(0,2)}) ${apenas.slice(2,3)} ${apenas.slice(3,7)}-${apenas.slice(7,11)}` : `(${apenas.slice(0,2)}) ${apenas.slice(2,3)} ${apenas.slice(3,7)}-${apenas.slice(7)}`;
 }
 
 export function validarWhatsApp(valor: string): { valido: boolean; mensagem?: string; limpo: string } {

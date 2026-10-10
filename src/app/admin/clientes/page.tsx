@@ -24,6 +24,11 @@ export default function ClientesPage() {
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [clienteSelecionado, setClienteSelecionado] = useState<Cliente | null>(null);
+  const [historico, setHistorico] = useState<any[]>([]);
+  const [estatisticas, setEstatisticas] = useState<any>({ total: 0, porProcedimento: {} });
+  const [periodo, setPeriodo] = useState<'7dias' | '30dias' | 'ano' | 'todos'>('30dias');
+  const [loadingHistorico, setLoadingHistorico] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [formData, setFormData] = useState({ nome: '', sobrenome: '', whatsapp: '' });
 
@@ -126,6 +131,53 @@ export default function ClientesPage() {
     setEditingId(cliente.id);
     setShowForm(true);
     setError(null);
+  }
+
+  async function carregarHistorico(cliente: Cliente) {
+    setLoadingHistorico(true);
+    setClienteSelecionado(cliente);
+    try {
+      const agora = new Date();
+      let dataInicio = new Date(agora);
+      if (periodo === '7dias') dataInicio.setDate(agora.getDate() - 7);
+      else if (periodo === '30dias') dataInicio.setDate(agora.getDate() - 30);
+      else if (periodo === 'ano') dataInicio.setMonth(0, 1);
+      else dataInicio = new Date('1970-01-01');
+
+      const { data: atendimentos, error } = await supabase
+        .from('atendimentos')
+        .select(`
+          id, status, criado_em, modo,
+          procedimentos!procedimento_id ( nome )
+        `)
+        .eq('cliente_id', cliente.id)
+        .eq('status', 'finalizado')
+        .gte('criado_em', dataInicio.toISOString())
+        .order('criado_em', { ascending: false });
+
+      if (error) throw error;
+      const lista = (atendimentos || []) as any[];
+      setHistorico(
+        lista.map((a: any) => ({
+          id: a.id,
+          data: a.criado_em ? new Date(a.criado_em).toLocaleDateString('pt-BR') : '--',
+          procedimento: a.procedimentos?.nome || '--',
+          status: a.status || 'finalizado',
+        }))
+      );
+
+      const procedimentos: Record<string, number> = {};
+      lista.forEach((a: any) => {
+        const nome = a.procedimentos?.nome || 'Outros';
+        procedimentos[nome] = (procedimentos[nome] || 0) + 1;
+      });
+      setEstatisticas({ total: lista.length, porProcedimento: procedimentos });
+    } catch (e) {
+      setHistorico([]);
+      setEstatisticas({ total: 0, porProcedimento: {} });
+    } finally {
+      setLoadingHistorico(false);
+    }
   }
 
   function handleCancel() {
@@ -303,15 +355,84 @@ export default function ClientesPage() {
 
                 <div className="mt-auto border-t border-zinc-100 pt-4">
                   <button
-                    onClick={() => handleEdit(cliente)}
+                    onClick={() => { setClienteSelecionado(cliente); carregarHistorico(cliente); }}
                     className="min-h-12 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm font-semibold text-zinc-900 transition-colors hover:border-zinc-900 hover:bg-zinc-100"
                   >
-                    Editar cliente
+                    Ver histórico
                   </button>
                 </div>
               </article>
             ))}
           </div>
+          </section>
+        )}
+
+        {/* Perfil + histórico do cliente selecionado */}
+        {clienteSelecionado && (
+          <section aria-label="Histórico do cliente" className="mt-8 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-xl font-bold tracking-tight text-zinc-900">{clienteSelecionado.nome} {clienteSelecionado.sobrenome}</h2>
+                <p className="text-sm text-zinc-500">WhatsApp: {formatarWhatsApp(clienteSelecionado.whatsapp)}</p>
+              </div>
+              <button type="button" onClick={() => setClienteSelecionado(null)} className="min-h-10 rounded-xl border border-zinc-300 px-3 py-2 text-xs font-semibold text-zinc-600 hover:bg-zinc-50">Fechar</button>
+            </div>
+
+            <div className="flex flex-wrap gap-2 mb-5">
+              {(['7dias', '30dias', 'ano', 'todos'] as const).map((p) => (
+                <button key={p} type="button" onClick={() => { setPeriodo(p); carregarHistorico(clienteSelecionado); }} aria-pressed={periodo === p} className={`min-h-9 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${periodo === p ? 'bg-zinc-900 text-amber-400' : 'bg-zinc-50 text-zinc-600 hover:bg-zinc-100'}`}>
+                  {p === '7dias' ? '7 dias' : p === '30dias' ? '30 dias' : p === 'ano' ? 'Este ano' : 'Todos'}
+                </button>
+              ))}
+            </div>
+
+            {loadingHistorico ? (
+              <p className="text-sm text-zinc-500">Carregando histórico...</p>
+            ) : (
+              <>
+                <div className="grid grid-cols-3 gap-3 mb-5">
+                  <div className="rounded-xl bg-zinc-50 border border-zinc-200 px-4 py-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Total</p>
+                    <p className="text-2xl font-bold text-zinc-900">{estatisticas.total}</p>
+                  </div>
+                  <div className="rounded-xl bg-zinc-50 border border-zinc-200 px-4 py-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Primeiro</p>
+                    <p className="text-sm font-bold text-zinc-900">{historico.length ? [...historico].map((h: any) => h.data).sort()[0] : '--'}</p>
+                  </div>
+                  <div className="rounded-xl bg-zinc-50 border border-zinc-200 px-4 py-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Último</p>
+                    <p className="text-sm font-bold text-zinc-900">{historico.length ? [...historico].map((h: any) => h.data).sort().pop() : '--'}</p>
+                  </div>
+                </div>
+
+                <div className="mb-5">
+                  <h3 className="text-sm font-bold text-zinc-900 mb-2">Por procedimento</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {Object.entries(estatisticas.porProcedimento || {}).map((entry) => (
+                      <span key={String(entry[0])} className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-900">{String(entry[0])} <span className="text-amber-700">{String(entry[1])}</span></span>
+                    ))}
+                    {Object.keys(estatisticas.porProcedimento || {}).length === 0 && <span className="text-xs text-zinc-400">Nenhum procedimento finalizado no período.</span>}
+                  </div>
+                </div>
+
+                <h3 className="text-sm font-bold text-zinc-900 mb-3">Histórico (finalizados)</h3>
+                {historico.length === 0 ? (
+                  <p className="text-sm text-zinc-500">Nenhum atendimento finalizado no período.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {historico.map((item: any) => (
+                      <div key={String(item.id)} className="flex items-center justify-between rounded-xl border border-zinc-200 bg-white px-4 py-3">
+                        <div>
+                          <p className="text-sm font-bold text-zinc-900">{item.procedimento}</p>
+                          <p className="text-xs text-zinc-500">{item.data}</p>
+                        </div>
+                        <span className="text-xs font-semibold text-emerald-700">{item.status}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
           </section>
         )}
       </div>

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { createBrowserClient } from '@supabase/ssr';
 import { SolicitacaoPendente } from '@/lib/types';
 import { formatarWhatsApp } from '@/lib/types';
 import {
@@ -16,9 +17,14 @@ export default function SolicitacoesPage() {
   const [mensagemSucesso, setMensagemSucesso] = useState<string | null>(null);
   const [processandoId, setProcessandoId] = useState<string | null>(null);
 
-  useEffect(() => {
-    carregarSolicitacoes();
-  }, []);
+  const supabase = useMemo(
+    () =>
+      createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      ),
+    []
+  );
 
   async function carregarSolicitacoes() {
     try {
@@ -42,6 +48,33 @@ export default function SolicitacoesPage() {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    carregarSolicitacoes();
+
+    const channel = supabase
+      .channel('solicitacoes-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'atendimentos',
+        },
+        (payload) => {
+          console.log('[Realtime] Evento recebido:', payload.eventType, payload);
+          carregarSolicitacoes();
+        }
+      )
+      .subscribe((status) => {
+        console.log('[Realtime] Status do canal:', status);
+      });
+
+    return () => {
+      console.log('[Realtime] Removendo canal');
+      supabase.removeChannel(channel);
+    };
+  }, [supabase]);
 
   async function handleAprovar(id: string) {
     try {

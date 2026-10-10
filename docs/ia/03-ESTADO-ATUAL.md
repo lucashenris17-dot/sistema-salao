@@ -2,7 +2,7 @@
 
 > Snapshot do que está funcionando, o que está em progresso e o que está quebrado **agora**.
 
-**Última atualização:** 2026-10-01
+**Última atualização:** 2026-10-10
 
 ---
 
@@ -23,15 +23,23 @@
 ### Fluxo Admin (Gestão)
 
 - ✅ Login com Supabase Auth
-- ✅ Dashboard `/admin` com contadores e próximos horários
+- ✅ Dashboard `/admin` reformulado como central operacional (2026-10-03, 2ª reformulação):
+  - Cards de resumo: Solicitações pendentes (destaque), Atendimentos do dia, Bloqueios da agenda
+  - Próximos atendimentos como foco principal: próximo em destaque (card preto com horário, cliente, procedimento, duração, status) + demais horários do dia
+  - Nova seção "Resumo do salão" com seletor de período (Hoje / Esta semana / Este mês): clientes atendidos, total de procedimentos, finalizados, cancelados, procedimentos por tipo
+  - Removidos: botões duplicados de Solicitações/Atendimentos do topo, ações rápidas repetitivas, pills de status
+  - Removidos da tela inicial: Clientes, Procedimentos, Bloqueios (já existem no menu)
 - ✅ Listagem de solicitações pendentes em `/admin/solicitacoes`
+- ✅ **Realtime em /admin/solicitacoes** — atualiza automaticamente quando cliente cria nova solicitação
 - ✅ Aprovar solicitação → `status_confirmacao = 'confirmado'`
 - ✅ Recusar solicitação → `status = 'cancelado'` + `status_confirmacao = 'recusado'`
 - ✅ Gestão de atendimentos em `/admin/atendimentos`
 - ✅ Ações: iniciar, pausar, retomar, finalizar, cancelar, no_show
 - ✅ CRUD de clientes em `/admin/clientes`
 - ✅ CRUD de procedimentos em `/admin/procedimentos`
-- ✅ Gestão de bloqueios de agenda em `/admin/bloqueios`
+- ✅ **Melhoria 1 (2026-10-03):** Atendimentos ordenados por horário (`horario_agendado ASC` para agendamento, `ordem_fila ASC` para fila) — nenhum status removido
+- ✅ **Melhoria 2 (2026-10-03):** Badge flutuante vermelho no layout admin (`layout.tsx`) — mostra `status_confirmacao = 'pendente'` em tempo real, link para `/admin/solicitacoes`
+- ✅ `/admin/bloqueios` simplificado com 2 modelos: Semanal (recorrente) e Data específica (cards listáveis, excluir, descricao) — nenhuma migração no banco (`bloqueios_agenda` mantida)
 - ✅ Logout funciona
 
 ### Banco de Dados
@@ -101,37 +109,13 @@ Adicionar filtro:
 .neq('status_confirmacao', 'pendente')
 ```
 
-### 3. Contador de pendentes no dashboard usa lógica mista
+### 3. ~~Contador de pendentes no dashboard usa lógica mista~~ ✅ RESOLVIDO (2026-10-03)
 
-**Arquivo:** `src/app/admin/page.tsx:99`
+**Arquivo:** `src/app/admin/page.tsx`
 
-**Código atual:**
+**Era:** `total: listaHoje.length` (contava todos os statuses)
 
-```ts
-pendentes: listaHoje.filter((x) =>
-  x.status === 'aguardando' || (x as any).status_confirmacao === 'pendente'
-).length
-```
-
-**Problema:**
-
-- Conta atendimentos `aguardando` (operacional) + pendentes (aprovação)
-- Pode mostrar número diferente da página `/admin/solicitacoes` (que filtra só por `status_confirmacao`)
-
-**Impacto:**
-
-- Badge no dashboard pode mostrar 5, mas página de solicitações tem só 3
-- Confuso para admin
-
-**Solução futura:**
-
-Padronizar para contar apenas:
-
-```ts
-pendentes: listaHoje.filter((x) =>
-  (x as any).status_confirmacao === 'pendente'
-).length
-```
+**Agora:** Filtra apenas `aguardando`, `em_andamento`, `pausado` — excluindo `finalizado`, `cancelado`, `no_show`.
 
 ---
 
@@ -235,11 +219,11 @@ src/
 │   ├── acompanhar/[token]/page.tsx         ✅ OK (com fix 2026-10-01)
 │   ├── login/page.tsx                      ✅ OK
 │   ├── admin/
-│   │   ├── page.tsx                        🟡 Contador misto (não bloqueante)
+│   │   ├── page.tsx                        ✅ OK (reformulado 2026-10-03)
 │   │   ├── layout.tsx                      ✅ OK
 │   │   ├── atendimentos/
 │   │   │   ├── page.tsx                    ✅ OK
-│   │   │   └── proximo-atendimento.tsx     🟡 Não filtra status_confirmacao
+│   │   │   └── proximo-atendimento.tsx     ✅ OK (filtra status_confirmacao)
 │   │   ├── solicitacoes/page.tsx           ✅ OK
 │   │   ├── clientes/page.tsx               ✅ OK
 │   │   ├── procedimentos/page.tsx          ✅ OK
@@ -310,3 +294,13 @@ docs/
 - Problemas conhecidos são **não bloqueantes** e têm workarounds
 - Documentação está **atualizada e completa**
 - Código está **limpo e tipado**
+
+---
+
+## Atualização de auditoria — 2026-10-10
+
+**Itens verificados e registrados:**
+- Janela de 15 dias (`/agendar`) — registrado no código (`Array.from({length:15})`); documentação atualizada.
+- Filtros de atendimentos (tabs "Hoje" / "Esta semana" / "Finalizados") — implementados no admin; documento atualizado.
+- Conflito bloqueios × atendimentos (aviso + WhatsApp `wa.me`, botões Manter/Cancelar, sem auto-cancelar) — memória `conflito-bloqueios-atendimentos.md` criada; ponteiro em `MEMORY.md`; docs atualizados.
+- Nenhum arquivo `src/` alterado; apenas documentação/memória conforme instrução.

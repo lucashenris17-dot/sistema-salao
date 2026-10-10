@@ -1,0 +1,2 @@
+- [Conflito bloqueios atendimentos](conflito-bloqueios-atendimentos.md) — Aviso de conflito sem cancelar/remarcar; WhatsApp via wa.me/; testes casos 1/2/3
+- [conflito-bloqueios-atendimentos](memory/conflito-bloqueios-atendimentos.md) — Conflito bloqueios × atendimentos implementado (aviso, WhatsApp wa.me, botões Manter/Cancelar, sem auto-cancelar).

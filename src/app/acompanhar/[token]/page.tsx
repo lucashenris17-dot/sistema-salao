@@ -301,30 +301,22 @@ setPrevisao(preds[atendimentoData.id] || {});
             {statusCfg.mensagem}
           </div>
 
-        {atendimento.status === 'aguardando' && atendimento.ordem_fila && !isEncerrado && (
-  <div className="mx-4 mb-5 bg-blue-50 border border-blue-200 rounded-2xl p-4 shadow-sm">
-    <div className="flex items-center gap-2 mb-2">
-      <span className="text-xl">👥</span>
-      <p className="text-xs font-bold text-blue-500 uppercase tracking-wide">
-        Sua posição na fila
-      </p>
-    </div>
-
-    <p className="text-base font-bold text-blue-800">
-      {atendimento.ordem_fila === 1
-        ? "Você é o próximo!"
-        : "Tem " +
-          (atendimento.ordem_fila - 1) +
-          " pessoa" +
-          ((atendimento.ordem_fila - 1) > 1 ? "s" : "") +
-          " na sua frente."}
-    </p>
-
-    <p className="text-xs text-blue-600 mt-2">
-      A previsão é atualizada automaticamente.
-    </p>
-  </div>
-)}
+        {/* Previsão inteligente — apenas horário estimado, sem expor fila */}
+        {!isEncerrado && (
+          <div className="mx-4 mb-5 bg-amber-50 border border-amber-200 rounded-2xl p-4 shadow-sm">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-xl">🕐</span>
+              <p className="text-xs font-bold text-amber-600 uppercase tracking-wide">
+                Previsão de atendimento
+              </p>
+            </div>
+            <p className="text-sm text-amber-800 leading-snug">
+              {previsao.inicio_previsto
+                ? `Previsão atual: ${new Date(previsao.inicio_previsto).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })}`
+                : 'Seu horário está mantido.'}
+            </p>
+          </div>
+        )}
   
             {/* Bloco Previsão — só para status ativos */}
           {!isEncerrado && previsao.inicio_previsto && (

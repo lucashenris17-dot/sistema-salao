@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
 import { AdminIcon } from "./admin-icon";
@@ -20,16 +20,79 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const router = useRouter();
   const pathname = usePathname();
   const [menuAberto, setMenuAberto] = useState(false);
+  const [pendentesCount, setPendentesCount] = useState<number | null>(null);
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  const supabase = useMemo(
+    () =>
+      createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      ),
+    []
   );
+
+  useEffect(() => {
+    async function carregarContador() {
+      const { count, error } = await supabase
+        .from("atendimentos")
+        .select("*", { count: "exact", head: true })
+        .eq("status_confirmacao", "pendente");
+
+      if (!error && count !== null) {
+        setPendentesCount(count);
+      }
+    }
+
+    carregarContador();
+
+    const channel = supabase
+      .channel("layout-pendentes-realtime")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "atendimentos",
+        },
+        () => {
+          carregarContador();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   async function sair() {
     await supabase.auth.signOut();
     router.push("/login");
   }
+
+  const [badgeContador, setBadgeContador] = useState(0);
+
+  const carregarBadge = useCallback(async () => {
+    const { count, error } = await supabase
+      .from("atendimentos")
+      .select("*", { count: "exact", head: true })
+      .eq("status_confirmacao", "pendente");
+    if (!error && count !== null) setBadgeContador(count);
+    else setBadgeContador(0);
+  }, [supabase]);
+
+  useEffect(() => {
+    carregarBadge();
+    const channel = supabase
+      .channel("badge-pendentes-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "atendimentos" },
+        () => carregarBadge()
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [supabase, carregarBadge]);
 
   const paginaAtual = navigation.find((item) => item.href === pathname);
 
@@ -74,10 +137,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <nav id="navegacao-admin" aria-label="Navegação administrativa" className={`${menuAberto ? "grid" : "hidden"} grid-cols-2 gap-2 pb-4 md:flex md:flex-wrap md:gap-1 md:py-3`}>
             {navigation.map((item) => {
               const ativo = pathname === item.href;
+              const eSolicitacoes = item.href === "/admin/solicitacoes";
               return (
-                <Link key={item.href} href={item.href} onClick={() => setMenuAberto(false)} aria-current={ativo ? "page" : undefined} className={`flex min-h-12 min-w-0 items-center gap-2 rounded-xl px-3 py-3 text-xs font-semibold transition-colors sm:text-sm ${ativo ? "bg-zinc-900 text-amber-400 shadow-sm" : "bg-zinc-50 text-zinc-600 hover:bg-amber-50 hover:text-zinc-900 md:bg-white"}`}>
-                  <AdminIcon name={item.icon} className="h-[18px] w-[18px]" />
-                  {item.label}
+                <Link key={item.href} href={item.href} onClick={() => setMenuAberto(false)} aria-current={ativo ? "page" : undefined} className={`flex min-h-12 min-w-0 items-center justify-between gap-2 rounded-xl px-3 py-3 text-xs font-semibold transition-colors sm:text-sm ${ativo ? "bg-zinc-900 text-amber-400 shadow-sm" : "bg-zinc-50 text-zinc-600 hover:bg-amber-50 hover:text-zinc-900 md:bg-white"}`}>
+                  <span className="flex min-w-0 items-center gap-2">
+                    <AdminIcon name={item.icon} className="h-[18px] w-[18px]" />
+                    {item.label}
+                  </span>
+                  {eSolicitacoes && pendentesCount !== null && pendentesCount > 0 && (
+                    <span className={`flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[11px] font-bold leading-none ${ativo ? "bg-amber-400 text-zinc-900" : "bg-amber-500 text-white"}`}>
+                      {pendentesCount}
+                    </span>
+                  )}
                 </Link>
               );
             })}
@@ -90,7 +161,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <main id="conteudo-admin" tabIndex={-1} className="min-w-0 pb-8 outline-none">
         {children}
       </main>
-      <footer className="px-4 pb-6 text-center text-xs text-zinc-500">
+      <Link href="/admin/solicitacoes" aria-label={`Solicitações pendentes: ${badgeContador}`} className={`fixed right-4 top-4 z-50 flex h-10 w-10 items-center justify-center rounded-xl bg-red-600 text-sm font-bold text-white shadow-lg transition-transform hover:scale-105 ring-2 ring-white ${badgeContador > 0 ? 'scale-100' : 'pointer-events-none scale-0 opacity-0'}`}>
+      {badgeContador}
+    </Link>
+    <footer className="px-4 pb-6 text-center text-xs text-zinc-500">
         <span className="mx-auto mb-3 block h-0.5 w-8 rounded-full bg-amber-400" />
         Salão da Inácia · Seu dia, bem organizado.
       </footer>

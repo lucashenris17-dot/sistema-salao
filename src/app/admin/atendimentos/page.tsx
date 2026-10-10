@@ -1,9 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
 import { calcularPrevisao } from '@/lib/previsao';
+import { calcularGradeHorario } from '@/lib/horarios';
+import { mascaraWhatsApp } from '@/lib/types';
+import GradeHorario from '@/components/grade-horarios';
 import ProximoAtendimento from './proximo-atendimento';
 
 function gerarToken() {
@@ -16,6 +19,7 @@ export interface AtendimentoListItem {
   procedimento_id: string;
   modo: 'agendamento' | 'fila';
   status: string;
+  status_confirmacao?: string;
   horario_agendado?: string;
   ordem_fila?: number;
   motivo_cancelamento?: string;
@@ -60,6 +64,14 @@ export default function AtendimentosPage() {
     modo: 'agendamento' as 'agendamento' | 'fila',
     ordem_fila: 1,
   });
+  const [modoCliente, setModoCliente] = useState<'existente' | 'novo'>('existente');
+  const [novoCliente, setNovoCliente] = useState({
+    nome: '',
+    sobrenome: '',
+    whatsapp: '',
+  });
+  const [erroWhatsapp, setErroWhatsapp] = useState(false);
+  const [filtroTab, setFiltroTab] = useState<'hoje' | 'semana' | 'finalizados'>('hoje');
   const [dataAgendamento, setDataAgendamento] = useState('');
   const [horaAgendamento, setHoraAgendamento] = useState('');
 
@@ -169,7 +181,8 @@ export default function AtendimentosPage() {
           )
         `)
         .eq('status_confirmacao', 'confirmado')
-        .order('criado_em', { ascending: false });
+        .order('horario_agendado', { ascending: false, nullsFirst: false })
+        .order('ordem_fila', { ascending: true, nullsFirst: false });
 
       if (err) throw err;
 
@@ -585,8 +598,12 @@ const mensagem = encodeURIComponent(
 
     setError(null);
 
-    if (!formData.cliente_id) {
+    if (modoCliente === 'existente' && !formData.cliente_id) {
       setError('Selecione um cliente.');
+      return;
+    }
+    if (modoCliente === 'novo' && !novoCliente.nome.trim()) {
+      setError('Informe o nome do novo cliente.');
       return;
     }
 
@@ -612,6 +629,26 @@ const mensagem = encodeURIComponent(
     }
 
     try {
+      // Se for novo cliente, cria no banco antes de prosseguir
+      let clienteId = formData.cliente_id;
+      if (modoCliente === 'novo') {
+        const whatsappLimpo = (novoCliente.whatsapp || '').replace(/\D/g,'').slice(0,11);
+        if (whatsappLimpo.length >= 10) {
+          const { data: dup } = await supabase.from('clientes').select('id, nome, sobrenome').eq('whatsapp', whatsappLimpo).maybeSingle();
+          if (dup) { setErroWhatsapp(true); setError('Contato duplicado: número já cadastrado para ' + dup.nome + ' ' + (dup.sobrenome || '') + '. Use a aba "Já existe".'); return; }
+        }
+        const { data: novoC, error: errNovo } = await supabase
+          .from('clientes')
+          .insert([{ nome: novoCliente.nome.trim(), sobrenome: novoCliente.sobrenome.trim(), whatsapp: whatsappLimpo ? mascaraWhatsApp(whatsappLimpo) : null }])
+          .select('id, nome, sobrenome')
+          .single();
+        if (errNovo || !novoC) { setError(errNovo?.message || 'Erro ao criar cliente'); return; }
+        clienteId = novoC.id;
+        setClientes((prev) => [...prev, novoC].sort((a,b) => a.nome.localeCompare(b.nome)));
+        setFormData((prev) => ({ ...prev, cliente_id: novoC.id }));
+        setModoCliente('existente');
+      }
+
       // Os dois campos representam o horário do salão, em Brasília (UTC-3).
       const horarioAgendado = formData.modo === 'agendamento'
         ? new Date(`${dataAgendamento}T${horaAgendamento}:00-03:00`).toISOString()
@@ -633,7 +670,7 @@ const mensagem = encodeURIComponent(
         }
 
         const payload: any = {
-          cliente_id: formData.cliente_id,
+          cliente_id: clienteId,
           procedimento_id: formData.procedimento_id,
           modo: formData.modo,
         };
@@ -657,7 +694,7 @@ const mensagem = encodeURIComponent(
         setEditingId(null);
       } else {
         const payload: any = {
-          cliente_id: formData.cliente_id,
+          cliente_id: clienteId,
           procedimento_id: formData.procedimento_id,
           modo: formData.modo,
           status: 'aguardando',
@@ -888,12 +925,10 @@ const mensagem = encodeURIComponent(
   }
 
   const diasSemana = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-  const dataBase = dataAgendamento ? new Date(`${dataAgendamento}T12:00:00`) : new Date();
-  const inicioSemana = new Date(dataBase);
-  inicioSemana.setDate(dataBase.getDate() - ((dataBase.getDay() + 6) % 7));
-  const diasDaSemana = Array.from({ length: 7 }, (_, indice) => {
-    const data = new Date(inicioSemana);
-    data.setDate(inicioSemana.getDate() + indice);
+  // Grade de 15 dias para frente (mesma regra que /agendar).
+  const diasDaSemana = Array.from({ length: 15 }, (_, indice) => {
+    const data = new Date();
+    data.setDate(data.getDate() + indice);
     return {
       iso: `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, '0')}-${String(data.getDate()).padStart(2, '0')}`,
       diaSemana: diasSemana[data.getDay()],
@@ -948,17 +983,41 @@ const mensagem = encodeURIComponent(
             </div>
             <div className="grid min-w-0 gap-5 sm:grid-cols-2">
               <div className="min-w-0">
-                <label htmlFor="cliente_id" className="mb-1.5 block text-sm font-medium text-zinc-700">Cliente *</label>
-                <select
-                  id="cliente_id"
-                  value={formData.cliente_id}
-                  onChange={(e) => setFormData({ ...formData, cliente_id: e.target.value })}
-                  className={campoClass}
-                  required
-                >
-                  <option value="">Selecione o cliente</option>
-                  {clientes.map((c) => <option key={c.id} value={c.id}>{c.nome} {c.sobrenome}</option>)}
-                </select>
+                <label className="mb-1.5 block text-sm font-medium text-zinc-700">Cliente *</label>
+                <div className="grid grid-cols-2 gap-2 mb-3">
+                  <button type="button" aria-pressed={modoCliente === 'existente'} onClick={() => { setModoCliente('existente'); setFormData({ ...formData, cliente_id: '' }); }} className="min-h-11 rounded-xl border px-3 py-2 text-sm font-semibold transition">Já existe</button>
+                  <button type="button" aria-pressed={modoCliente === 'novo'} onClick={() => { setModoCliente('novo'); setFormData({ ...formData, cliente_id: '' }); setNovoCliente({ nome: '', sobrenome: '', whatsapp: '' }); }} className="min-h-11 rounded-xl border px-3 py-2 text-sm font-semibold transition">Cliente novo</button>
+                </div>
+                {modoCliente === 'existente' ? (
+                  <select
+                    id="cliente_id"
+                    value={formData.cliente_id}
+                    onChange={(e) => setFormData({ ...formData, cliente_id: e.target.value })}
+                    className={campoClass}
+                  >
+                    <option value="">Selecione o cliente</option>
+                    {clientes.map((c) => <option key={c.id} value={c.id}>{c.nome} {c.sobrenome}</option>)}
+                  </select>
+                ) : (
+                  <div className="space-y-3">
+                    <div>
+                      <label htmlFor="novonome" className="mb-1.5 block text-sm font-medium text-zinc-700">Nome *</label>
+                      <input id="novonome" type="text" value={novoCliente.nome} onChange={(e) => setNovoCliente({ ...novoCliente, nome: e.target.value })} className={campoClass} placeholder="Ex: Maria" />
+                    </div>
+                    <div>
+                      <label htmlFor="novosobrenome" className="mb-1.5 block text-sm font-medium text-zinc-700">Sobrenome (opcional)</label>
+                      <input id="novosobrenome" type="text" value={novoCliente.sobrenome} onChange={(e) => setNovoCliente({ ...novoCliente, sobrenome: e.target.value })} className={campoClass} placeholder="Ex: Silva" />
+                    </div>
+                    <div>
+                      <label htmlFor="novowhatsapp" className="mb-1.5 block text-sm font-medium text-zinc-700">WhatsApp (opcional)</label>
+                      <input id="novowhatsapp" type="tel" value={novoCliente.whatsapp} onChange={(e) => {
+                        const masked = mascaraWhatsApp(e.target.value);
+                        setErroWhatsapp(false);
+                        setNovoCliente({ ...novoCliente, whatsapp: masked });
+                      }} maxLength={15} className={erroWhatsapp ? 'min-h-12 w-full min-w-0 rounded-xl border-2 border-red-400 bg-red-50 px-4 py-3 text-base text-zinc-900 placeholder:text-zinc-400 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500' : campoClass} placeholder="(87) 9 9845-4566" aria-invalid={erroWhatsapp} />
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="min-w-0">
                 <label htmlFor="procedimento_id" className="mb-1.5 block text-sm font-medium text-zinc-700">Procedimento *</label>
@@ -1018,43 +1077,20 @@ const mensagem = encodeURIComponent(
                       );
                     })}
                   </div>
-                  <div className="grid min-w-0 gap-4 sm:grid-cols-2">
-                    <div className="min-w-0">
-                      <label htmlFor="data_agendamento" className="mb-1.5 block text-sm font-medium text-zinc-700">Data do atendimento *</label>
-                      <div className="relative min-w-0">
-                        <input
-                          id="data_agendamento"
-                          type="date"
-                          autoComplete="off"
-                          value={dataAgendamento}
-                          onChange={(e) => setDataAgendamento(e.target.value)}
-                          className="peer block box-border h-12 w-full min-w-0 max-w-full appearance-none rounded-xl border border-zinc-300 bg-white px-4 py-3 text-left text-base text-zinc-900 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
-                          required
-                        />
-                        {!dataAgendamento && (
-                          <span aria-hidden="true" className="pointer-events-none absolute inset-y-2 left-4 right-10 flex items-center bg-white text-base text-zinc-900 peer-focus:hidden">Selecione a data</span>
-                        )}
-                      </div>
-                      <p className="mt-2 text-xs text-zinc-500">Use o calendário para escolher qualquer outra data.</p>
-                    </div>
-                    <div className="min-w-0">
-                      <label htmlFor="hora_agendamento" className="mb-1.5 block text-sm font-medium text-zinc-700">Horário *</label>
-                      <div className="relative min-w-0">
-                        <input
-                          id="hora_agendamento"
-                          type="time"
-                          step="300"
-                          autoComplete="off"
-                          value={horaAgendamento}
-                          onChange={(e) => setHoraAgendamento(e.target.value)}
-                          className="peer block box-border h-12 w-full min-w-0 max-w-full appearance-none rounded-xl border border-zinc-300 bg-white px-4 py-3 text-left text-base text-zinc-900 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
-                          required
-                        />
-                        {!horaAgendamento && (
-                          <span aria-hidden="true" className="pointer-events-none absolute inset-y-2 left-4 right-10 flex items-center bg-white text-base text-zinc-900 peer-focus:hidden">Selecione o horário</span>
-                        )}
-                      </div>
-                    </div>
+                  <div className="min-w-0 mt-3">
+                    <label htmlFor="hora_agendamento" className="mb-1.5 block text-sm font-medium text-zinc-700">Horário *</label>
+                    <GradeHorario
+                      opcoes={(() => {
+                        try {
+                          const proc = procedimentos.find(p => p.id === formData.procedimento_id);
+                          const dur = proc && typeof (proc as any).duracao_estimada_min === 'number' ? (proc as any).duracao_estimada_min : 30;
+                          const ocupados = atendimentos.filter(a => a.horario_agendado && a.horario_agendado.substring(0,10) === dataAgendamento).map(a => ({ horario_agendado: a.horario_agendado, procedimentos: { duracao_estimada_min: 30 } }));
+                          return calcularGradeHorario(dataAgendamento || new Date().toISOString().split('T')[0], dur, [], ocupados as any);
+                        } catch { return []; }
+                      })()}
+                      valor={horaAgendamento}
+                      aoSelecionar={(h) => setHoraAgendamento(h)}
+                    />
                   </div>
                 </div>
               )}
@@ -1084,7 +1120,7 @@ const mensagem = encodeURIComponent(
         )}
 
         <div className="mb-4 flex items-center justify-between gap-3">
-          <h2 className="text-lg font-bold tracking-tight">Todos os atendimentos</h2>
+          <div className="flex flex-wrap gap-2">{["hoje","semana","finalizados"].map((t) => (<button key={t} type="button" onClick={() => setFiltroTab(t as any)} className={`rounded-xl px-3 py-2 text-xs font-semibold transition ${t === filtroTab ? "bg-zinc-900 text-white" : "bg-white border border-zinc-200 text-zinc-700"}`} aria-pressed={t === filtroTab}>{t === "hoje" ? "Hoje" : t === "semana" ? "Esta semana" : "Finalizados"}</button>))}</div>
           {!loading && <span className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-sm font-semibold tabular-nums text-zinc-600">{atendimentos.length}</span>}
         </div>
         {loading ? (

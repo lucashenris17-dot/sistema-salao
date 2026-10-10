@@ -71,7 +71,9 @@ export async function criarSolicitacaoAgendamento(
     }
 
     const supabase = await createSupabaseClient();
-    const whatsappLimpo = input.whatsapp.trim();
+    // Normalizar WhatsApp (remover todos os não-dígitos)
+    const whatsappNormalizado = input.whatsapp.replace(/\D/g, '');
+    const whatsappLimpo = whatsappNormalizado.trim();
     // Sobrenome é opcional: normaliza para string vazia ('') quando não
     // informado, evitando null em coluna NOT NULL do banco.
     const sobrenome = (input.sobrenome || '').trim();

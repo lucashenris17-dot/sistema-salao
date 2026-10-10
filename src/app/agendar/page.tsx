@@ -1,15 +1,17 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
-import { Procedimento, mascaraWhatsApp, validarWhatsApp } from '@/lib/types';
+import { BloqueioAgenda, Procedimento, mascaraWhatsApp, validarWhatsApp } from '@/lib/types';
 import { criarSolicitacaoAgendamento } from '@/app/actions/agendamento';
+import { calcularGradeHorario } from '@/lib/horarios';
+import GradeHorario from '@/components/grade-horarios';
 
-interface BloqueioItem {
-  inicio: string;
-  fim: string;
-}
+type BloqueioItem = Pick<
+  BloqueioAgenda,
+  'tipo' | 'dias_semana' | 'hora_inicio' | 'hora_fim' | 'inicio' | 'fim'
+>;
 
 interface AtendimentoItem {
   horario_agendado: string | null;
@@ -40,6 +42,13 @@ export default function AgendarPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Reconhecimento inteligente do cliente (estabilizado)
+  const [clienteReconhecido, setClienteReconhecido] = useState(false);
+  const [nomeClienteReconhecido, setNomeClienteReconhecido] = useState('');
+  const [ultimoAtendimento, setUltimoAtendimento] = useState<{ nome: string; criado_em: string; procedimento_id: string } | null>(null);
+  const [etapa1Sub, setEtapa1Sub] = useState<'whatsapp' | 'cadastro' | 'reconhecido'>('whatsapp');
+  const reconhecendoRef = useRef(false);
+
   // Formulário
   const [formData, setFormData] = useState({
     nome: '',
@@ -68,10 +77,11 @@ export default function AgendarPage() {
         setProcedimentos(procsData || []);
 
         // 2. Bloqueios de agenda
-        const { data: bloqData } = await supabase
+        const { data: bloqData, error: bloqErr } = await supabase
           .from('bloqueios_agenda')
-          .select('inicio, fim');
+          .select('tipo, dias_semana, hora_inicio, hora_fim, inicio, fim');
 
+        if (bloqErr) throw bloqErr;
         setBloqueios(bloqData || []);
 
         // 3. Atendimentos agendados ativos
@@ -117,7 +127,7 @@ export default function AgendarPage() {
       'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez',
     ];
 
-    for (let i = 0; i < 14; i++) {
+    for (let i = 0; i < 15; i++) {
       const dataObj = new Date(hoje);
       dataObj.setDate(hoje.getDate() + i);
 
@@ -158,98 +168,24 @@ export default function AgendarPage() {
     return lista;
   }, []);
 
-  // Filtrar horários indisponíveis para a data selecionada e procedimento escolhido
-  const horariosFiltrados = useMemo(() => {
+  const todosHorarios = useMemo(() => {
     if (!formData.data) return [];
-
     const duracaoMin = procedimentoSelecionado?.duracao_estimada_min || 30;
-    // Comparar pelo dia selecionado em minutos absolutos (evita timezone)
-    const dataSelec = formData.data;
-
-    // Converter data + hora para minutos do dia
-    function paraMinutos(dataStr: string, horaStr: string) {
-      const [h, m] = horaStr.split(':').map(Number);
-      return h * 60 + m;
-    }
-
-    function paraMinutosData(dataStr: string, horaISO?: string | null) {
-      if (!horaISO) return null;
-      // horaISO pode ser '2026-09-29T09:00:00...' ou apenas hora
-      const ts = horaISO.includes('T') ? horaISO.split('T')[1].split(':')[0] + ':' + horaISO.split('T')[1].split(':')[1] : horaISO;
-      const [h, m] = ts.split(':').map(Number);
-      return h * 60 + m;
-    }
-
-    // Preparar atendimentos confirmados do dia selecionado
-    const ocupados = (atendimentosOcupados || []).filter(a => {
-      if (!a.horario_agendado) return false;
-      // Só considerar se a data do atendimento == data selecionada
-      const dataAt = a.horario_agendado.substring(0, 10);
-      return dataAt === dataSelec;
-    }).map(a => {
-      const inicio = paraMinutosData(dataSelec, a.horario_agendado);
-      const dur = a.procedimentos?.duracao_estimada_min || 30;
-      return inicio !== null ? { inicio, fim: inicio + dur } : null;
-    }).filter(Boolean) as { inicio: number; fim: number }[];
-
-    // Preparar bloqueios do dia selecionado
-    const bloqueiosDia = (bloqueios || []).map(b => {
-      const ini = b.inicio ? b.inicio.substring(0, 10) : '';
-      const fim = b.fim ? b.fim.substring(0, 10) : '';
-      if (ini === dataSelec && fim === dataSelec) {
-        const iniMin = paraMinutosData(dataSelec, b.inicio.split('T')[1]?.substring(0, 5) || b.inicio.substring(11, 16));
-        const fimMin = paraMinutosData(dataSelec, b.fim.split('T')[1]?.substring(0, 5) || b.fim.substring(11, 16));
-        return iniMin !== null && fimMin !== null ? { inicio: iniMin, fim: fimMin } : null;
-      }
-      return null;
-    }).filter(Boolean) as { inicio: number; fim: number }[];
-
-    // Se data é hoje, não permitir horários que já passaram.
-    // Comparamos timestamps UTC diretamente: o horário selecionado é em
-    // Brasília (UTC-3) e new Date() dá o instante atual em UTC. Assim
-    // 14:30 Brasília (17:30 UTC) é menor que 14:40 Brasília (17:40 UTC)
-    // e é corretamente bloqueado.
-    const hojeStr = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }).split('/').reverse().join('-');
-    const agora = new Date();
-    const dataHoje = formData.data === hojeStr;
-
-    return horariosBase.filter((horaStr) => {
-      const inicioMin = paraMinutos(dataSelec, horaStr);
-      const fimMin = inicioMin + duracaoMin;
-
-      // Não permitir antes das 08:00 (limite da agenda)
-      if (inicioMin < 8 * 60) return false;
-
-      // Não permitir depois das 19:00 (limite da agenda)
-      if (inicioMin + duracaoMin > 19 * 60) return false;
-
-      // Bloqueio: sobreposição?
-      const conflitoBloqueio = bloqueiosDia.some(b => inicioMin < b.fim && fimMin > b.inicio);
-      if (conflitoBloqueio) return false;
-
-      // Atendimentos confirmados: sobreposição?
-      const conflitoAtendimento = ocupados.some(o => inicioMin < o.fim && fimMin > o.inicio);
-      if (conflitoAtendimento) return false;
-
-      // Se data é hoje, não permitir horários que já passaram.
-      if (dataHoje) {
-        const horarioSelecionado = new Date(`${dataSelec}T${horaStr}:00-03:00`);
-        if (horarioSelecionado.getTime() <= agora.getTime()) return false;
-      }
-
-      return true;
-    });
-  }, [formData.data, procedimentoSelecionado, horariosBase, bloqueios, atendimentosOcupados]);
+    // Lógica centralizada em src/lib/horarios.ts — usada também no painel admin.
+    const opcoes = calcularGradeHorario(
+      formData.data,
+      duracaoMin,
+      bloqueios as any[],
+      atendimentosOcupados as any[],
+    );
+    return opcoes;
+  }, [formData.data, procedimentoSelecionado, bloqueios, atendimentosOcupados]);
 
   // Avançar Etapa 1
   function handleEtapa1Continuar(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
 
-    if (!formData.nome.trim()) {
-      setError('Por favor, informe seu nome.');
-      return;
-    }
     if (!formData.whatsapp.trim()) {
       setError('Por favor, informe seu número de WhatsApp.');
       return;
@@ -257,6 +193,12 @@ export default function AgendarPage() {
     const v = validarWhatsApp(formData.whatsapp);
     if (!v.valido) {
       setError(v.mensagem || 'WhatsApp inválido.');
+      return;
+    }
+
+    // Somente cliente não encontrado precisa informar nome
+    if (etapa1Sub === 'cadastro' && !formData.nome.trim()) {
+      setError('Por favor, informe seu nome.');
       return;
     }
 
@@ -382,7 +324,7 @@ export default function AgendarPage() {
               Etapa {etapa} de 4
             </span>
             <span className="text-xs font-medium text-zinc-400">
-              {etapa === 1 && 'Dados pessoais'}
+              {etapa === 1 && 'WhatsApp'}
               {etapa === 2 && 'Procedimento'}
               {etapa === 3 && 'Data e Horário'}
               {etapa === 4 && 'Revisão'}
@@ -445,58 +387,48 @@ export default function AgendarPage() {
 
                 <form onSubmit={handleEtapa1Continuar} className="space-y-4">
                   <div>
-                    <label
-                      htmlFor="nome"
-                      className="block text-sm font-medium text-zinc-700 mb-1.5"
-                    >
-                      Nome
-                    </label>
-                    <input
-                      id="nome"
-                      type="text"
-                      value={formData.nome}
-                      onChange={(e) =>
-                        setFormData({ ...formData, nome: e.target.value })
-                      }
-                      placeholder="Ex: Maria"
-                      required
-                      className="min-h-12 w-full rounded-xl border border-zinc-300 px-4 py-3 text-base text-zinc-900 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
-                    />
-                  </div>
-
-                  <div>
-                    <label
-                      htmlFor="sobrenome"
-                      className="block text-sm font-medium text-zinc-700 mb-1.5"
-                    >
-                      Sobrenome (opcional)
-                    </label>
-                    <input
-                      id="sobrenome"
-                      type="text"
-                      value={formData.sobrenome}
-                      onChange={(e) =>
-                        setFormData({ ...formData, sobrenome: e.target.value })
-                      }
-                      placeholder="Ex: Silva"
-                      className="min-h-12 w-full rounded-xl border border-zinc-300 px-4 py-3 text-base text-zinc-900 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
-                    />
-                  </div>
-
-                  <div>
-                    <label
-                      htmlFor="whatsapp"
-                      className="block text-sm font-medium text-zinc-700 mb-1.5"
-                    >
-                      WhatsApp
-                    </label>
-                    <input
-                      id="whatsapp"
-                      type="tel"
-                      value={formData.whatsapp ? mascaraWhatsApp(formData.whatsapp) : ''}
-                      onChange={(e) => {
+                    <label htmlFor="whatsapp" className="block text-sm font-medium text-zinc-700 mb-1.5">WhatsApp</label>
+                    <input id="whatsapp" type="tel" value={formData.whatsapp ? mascaraWhatsApp(formData.whatsapp) : ''} onChange={(e) => {
                         const limpo = e.target.value.replace(/\D/g, '').slice(0, 11);
                         setFormData({ ...formData, whatsapp: limpo });
+                        // Reconhecimento inteligente por WhatsApp
+                        if (limpo.length >= 11) {
+                          if (reconhecendoRef.current) return;
+                          reconhecendoRef.current = true;
+                          (async () => {
+                            try {
+                              const { data: c } = await supabase.from('clientes').select('id,nome,sobrenome').eq('whatsapp', limpo).maybeSingle();
+                            if (c) {
+                              const nomeCompleto = `${(c as any).nome || ''} ${(c as any).sobrenome || ''}`.trim();
+                              setClienteReconhecido(true);
+                              setNomeClienteReconhecido(nomeCompleto);
+                              setFormData((prev) => ({ ...prev, nome: (c as any).nome || prev.nome, sobrenome: (c as any).sobrenome || prev.sobrenome }));
+                              // Buscar último atimento finalizado
+                              const { data: hist } = await supabase.from('atendimentos').select('criado_em, procedimento_id').eq('status', 'finalizado').order('criado_em', { ascending: false }).limit(1);
+                              const primeiro = (hist && hist[0]) || null;
+                              if (primeiro) {
+                                const { data: proc } = await supabase.from('procedimentos').select('id,nome').eq('id', primeiro.procedimento_id).maybeSingle();
+                                setUltimoAtendimento({ nome: proc?.nome || 'Procedimento', criado_em: primeiro.criado_em, procedimento_id: primeiro.procedimento_id });
+                              } else {
+                                setUltimoAtendimento(null);
+                              }
+                              setEtapa1Sub('reconhecido');
+                            } else {
+                              setClienteReconhecido(false);
+                              setNomeClienteReconhecido('');
+                              setUltimoAtendimento(null);
+                              setEtapa1Sub('cadastro');
+                            }
+                            } finally {
+                              reconhecendoRef.current = false;
+                            }
+                          })();
+                        } else {
+                          setClienteReconhecido(false);
+                          setNomeClienteReconhecido('');
+                          setUltimoAtendimento(null);
+                          setEtapa1Sub('whatsapp');
+                        }
                       }}
                       placeholder="(87) 9 9845-4566"
                       required
@@ -504,10 +436,90 @@ export default function AgendarPage() {
                     />
                   </div>
 
+                  {/* Sub-etapa: cadastro de nome (somente cliente não encontrado) */}
+                  {etapa1Sub === 'cadastro' && (
+                    <div key="cadastro" className="space-y-4 pt-2">
+                      <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+                        Não encontramos um cadastro com este WhatsApp. Vamos criar seu perfil.
+                      </div>
+                      <div>
+                        <label htmlFor="nome" className="block text-sm font-medium text-zinc-700 mb-1.5">Nome</label>
+                        <input
+                          id="nome"
+                          type="text"
+                          value={formData.nome}
+                          onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
+                          placeholder="Ex: Maria"
+                          className="min-h-12 w-full rounded-xl border border-zinc-300 px-4 py-3 text-base text-zinc-900 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="sobrenome" className="block text-sm font-medium text-zinc-700 mb-1.5">Sobrenome (opcional)</label>
+                        <input
+                          id="sobrenome"
+                          type="text"
+                          value={formData.sobrenome}
+                          onChange={(e) => setFormData({ ...formData, sobrenome: e.target.value })}
+                          placeholder="Ex: Silva"
+                          className="min-h-12 w-full rounded-xl border border-zinc-300 px-4 py-3 text-base text-zinc-900 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Sub-etapa: cliente reconhecido — sugestão do último atendimento */}
+                  {etapa1Sub === 'reconhecido' && (
+                    <div key="reconhecido" className="space-y-4 pt-2">
+                      <div className="rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-800 leading-snug">
+                        Olá, {nomeClienteReconhecido || 'cliente'}! 👋<br />
+                        Que bom ter você de volta!
+                      </div>
+
+                      {ultimoAtendimento ? (
+                        <div className="rounded-xl bg-zinc-50 border border-zinc-200 p-4">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 mb-1">Seu último atendimento foi:</p>
+                          <p className="text-base font-bold text-zinc-900 flex items-center gap-1.5"><span>✂️</span> {ultimoAtendimento.nome}</p>
+                          <p className="text-xs text-zinc-500 mt-1">
+                            {new Date(ultimoAtendimento.criado_em).toLocaleDateString('pt-BR')}
+                          </p>
+                          <div className="mt-3 flex flex-col gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const procId = ultimoAtendimento?.procedimento_id;
+                                if (!procId) {
+                                  setError('Procedimento do último atendimento não encontrado. Escolha outro.');
+                                  return;
+                                }
+                                setFormData({ ...formData, procedimento_id: procId });
+                                setEtapa(3);
+                              }}
+                              className="min-h-11 w-full rounded-xl bg-zinc-900 py-3 text-sm font-semibold text-white hover:bg-zinc-800 transition-colors"
+                            >
+                              Repetir procedimento
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEtapa(2)}
+                              className="min-h-11 w-full rounded-xl border border-zinc-300 bg-white py-3 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 transition-colors"
+                            >
+                              Escolher outro procedimento
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="rounded-xl bg-zinc-50 border border-zinc-200 p-4 text-sm text-zinc-600">
+                          Você ainda não tem atendimentos finalizados. Vamos marcar um novo?
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div className="pt-3">
                     <button
                       type="submit"
-                      className="min-h-12 w-full rounded-xl bg-zinc-900 py-3.5 text-base font-semibold text-white transition-transform active:scale-[0.99] shadow-sm hover:bg-zinc-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900"
+                      disabled={etapa1Sub === 'cadastro' && !formData.nome.trim()}
+                      className="min-h-12 w-full rounded-xl bg-zinc-900 py-3.5 text-base font-semibold text-white transition-transform active:scale-[0.99] shadow-sm hover:bg-zinc-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 disabled:opacity-50"
                     >
                       Continuar
                     </button>
@@ -657,37 +669,21 @@ export default function AgendarPage() {
                   </div>
                 </div>
 
-                {/* Seleção de Horário */}
+                {/* Seleção de Horário — grade compartilhada com o painel admin */}
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-zinc-500 mb-3">
                     Horários disponíveis
                   </label>
-                  {horariosFiltrados.length === 0 ? (
+                  {todosHorarios.length === 0 ? (
                     <div className="p-4 bg-zinc-50 border border-zinc-200 rounded-xl text-center text-sm text-zinc-500">
                       Nenhum horário disponível para esta data. Por favor, selecione outro dia.
                     </div>
                   ) : (
-                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5 max-h-60 overflow-y-auto p-1">
-                      {horariosFiltrados.map((horaStr) => {
-                        const isSelected = formData.hora === horaStr;
-                        return (
-                          <button
-                            key={horaStr}
-                            type="button"
-                            onClick={() =>
-                              setFormData({ ...formData, hora: horaStr })
-                            }
-                            className={`py-3 px-2 rounded-xl text-center text-sm font-bold border transition-all ${
-                              isSelected
-                                ? 'border-zinc-900 bg-zinc-900 text-white shadow-md ring-2 ring-zinc-900'
-                                : 'border-zinc-200 bg-white text-zinc-800 hover:border-zinc-300 shadow-sm'
-                            }`}
-                          >
-                            {horaStr}
-                          </button>
-                        );
-                      })}
-                    </div>
+                    <GradeHorario
+                      opcoes={todosHorarios}
+                      valor={formData.hora}
+                      aoSelecionar={(h) => setFormData({ ...formData, hora: h })}
+                    />
                   )}
                 </div>
 
