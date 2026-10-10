@@ -56,6 +56,32 @@ Implementar verificação de conflito ao criar bloqueio (`/admin/bloqueios`): co
 
 ---
 
+## Sessão: 2026-10-10 (Padronização visual /admin/bloqueios — GradeHorario + cards)
+
+**Contexto:** Após concluir conflito + WhatsApp + URL, a interface de `/admin/bloqueios` ainda usava `<select>` para horas e botões básicos para dias, enquanto `/agendar` já usava `GradeHorario` (cards 30min) e cards de dias.
+
+**O que foi feito:**
+- `src/app/admin/bloqueios/page.tsx`: 6 `<select>` de horas substituídos por `<GradeHorario>` (3 abas × 2 horários); `opcoesGrade` gerado via `gerarGradeHorarios()`; cards de dias mantidos no padrão existente (`rounded-xl`, estados selecionado/não-selecionado).
+- Validação adicionada: `hora_fim > hora_inicio` (comparação em minutos) antes de `criarBloqueio`; retorna erro se fim ≤ início.
+- Código morto removido: `horas` useMemo (apenas usado nos selects antigos) substituído por `opcoesGrade`.
+- Nenhuma alteração em banco, actions, `/agendar`, conflito, WhatsApp ou `NEXT_PUBLIC_URL`.
+
+**Restrições cumpridas:**
+- Nenhum arquivo de `agendar/` alterado.
+- Nenhum auto-cancelar de conflito.
+- `process.env.NEXT_PUBLIC_URL || 'http://localhost:8080'` preservado no link WhatsApp.
+- Nenhuma migration / RLS / banco alterado.
+
+**Verificações:**
+- ✅ `npx tsc --noEmit` — 0 erros.
+- ✅ `npm run build` — passa (14 rotas, incluindo `/admin/bloqueios`).
+
+**Arquivos alterados:**
+- `src/app/admin/bloqueios/page.tsx`
+- `docs/ia/05-ULTIMA-SESSAO.md` (esta entrada)
+
+---
+
 ## Sessão: 2026-10-03 (Correção do fluxo inteligente do /agendar — WhatsApp primeiro)
 
 ### Contexto

@@ -101,6 +101,17 @@ export default function BloqueiosPage() {
       }
     }
 
+    if (formData.hora_inicio && formData.hora_fim) {
+      const ini = formData.hora_inicio.split(':').map(Number);
+      const fim = formData.hora_fim.split(':').map(Number);
+      const iniMin = ini[0] * 60 + ini[1];
+      const fimMin = fim[0] * 60 + fim[1];
+      if (fimMin <= iniMin) {
+        setError('Hora de fim deve ser posterior à hora de início');
+        return;
+      }
+    }
+
     try {
       setSalvando(true);
 
@@ -261,11 +272,7 @@ export default function BloqueiosPage() {
   }
 
   const diasSemanaLabels = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-  const horas = useMemo(() => Array.from({ length: 48 }, (_, i) => {
-    const h = Math.floor(i / 2).toString().padStart(2, '0');
-    const m = (i % 2 === 0 ? '00' : '30');
-    return `${h}:${m}`;
-  }), []);
+  const opcoesGrade = useMemo(() => gerarGradeHorarios().map((h) => ({ horaStr: h, disponivel: true, bloqueado: false })), []);
 
   return (
     <div className="min-h-screen min-w-0 bg-zinc-50 text-zinc-900">
@@ -417,29 +424,11 @@ Obrigada pela compreensão. 💛`)}`}
                       </fieldset>
                       <div>
                         <label htmlFor="semanal-hora-inicio" className="mb-1.5 block text-sm font-medium text-zinc-700">Hora de início</label>
-                        <select
-                          id="semanal-hora-inicio"
-                          value={formData.hora_inicio}
-                          onChange={(e) => setFormData({ ...formData, hora_inicio: e.target.value })}
-                          className="min-h-12 w-full rounded-xl border border-zinc-300 bg-white px-3 py-3 text-base text-zinc-900 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
-                          required
-                        >
-                          <option value="">Selecione</option>
-                          {horas.map((h) => <option key={h} value={h}>{h}</option>)}
-                        </select>
+                        <GradeHorario opcoes={opcoesGrade} valor={formData.hora_inicio} aoSelecionar={(h) => setFormData({ ...formData, hora_inicio: h })} />
                       </div>
                       <div>
                         <label htmlFor="semanal-hora-fim" className="mb-1.5 block text-sm font-medium text-zinc-700">Hora de fim</label>
-                        <select
-                          id="semanal-hora-fim"
-                          value={formData.hora_fim}
-                          onChange={(e) => setFormData({ ...formData, hora_fim: e.target.value })}
-                          className="min-h-12 w-full rounded-xl border border-zinc-300 bg-white px-3 py-3 text-base text-zinc-900 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
-                          required
-                        >
-                          <option value="">Selecione</option>
-                          {horas.map((h) => <option key={h} value={h}>{h}</option>)}
-                        </select>
+                        <GradeHorario opcoes={opcoesGrade} valor={formData.hora_fim} aoSelecionar={(h) => setFormData({ ...formData, hora_fim: h })} />
                       </div>
                     </>
                   )}
@@ -470,29 +459,11 @@ Obrigada pela compreensão. 💛`)}`}
                       </div>
                       <div>
                         <label htmlFor="temp-hora-inicio" className="mb-1.5 block text-sm font-medium text-zinc-700">Hora de início</label>
-                        <select
-                          id="temp-hora-inicio"
-                          value={formData.hora_inicio}
-                          onChange={(e) => setFormData({ ...formData, hora_inicio: e.target.value })}
-                          className="min-h-12 w-full rounded-xl border border-zinc-300 bg-white px-3 py-3 text-base text-zinc-900 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
-                          required
-                        >
-                          <option value="">Selecione</option>
-                          {horas.map((h) => <option key={h} value={h}>{h}</option>)}
-                        </select>
+                        <GradeHorario opcoes={opcoesGrade} valor={formData.hora_inicio} aoSelecionar={(h) => setFormData({ ...formData, hora_inicio: h })} />
                       </div>
                       <div>
                         <label htmlFor="temp-hora-fim" className="mb-1.5 block text-sm font-medium text-zinc-700">Hora de fim</label>
-                        <select
-                          id="temp-hora-fim"
-                          value={formData.hora_fim}
-                          onChange={(e) => setFormData({ ...formData, hora_fim: e.target.value })}
-                          className="min-h-12 w-full rounded-xl border border-zinc-300 bg-white px-3 py-3 text-base text-zinc-900 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
-                          required
-                        >
-                          <option value="">Selecione</option>
-                          {horas.map((h) => <option key={h} value={h}>{h}</option>)}
-                        </select>
+                        <GradeHorario opcoes={opcoesGrade} valor={formData.hora_fim} aoSelecionar={(h) => setFormData({ ...formData, hora_fim: h })} />
                       </div>
                     </>
                   )}
@@ -512,29 +483,11 @@ Obrigada pela compreensão. 💛`)}`}
                       </div>
                       <div>
                         <label htmlFor="esp-hora-inicio" className="mb-1.5 block text-sm font-medium text-zinc-700">Hora de início</label>
-                        <select
-                          id="esp-hora-inicio"
-                          value={formData.hora_inicio}
-                          onChange={(e) => setFormData({ ...formData, hora_inicio: e.target.value })}
-                          className="min-h-12 w-full rounded-xl border border-zinc-300 bg-white px-3 py-3 text-base text-zinc-900 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
-                          required
-                        >
-                          <option value="">Selecione</option>
-                          {horas.map((h) => <option key={h} value={h}>{h}</option>)}
-                        </select>
+                        <GradeHorario opcoes={opcoesGrade} valor={formData.hora_inicio} aoSelecionar={(h) => setFormData({ ...formData, hora_inicio: h })} />
                       </div>
                       <div>
                         <label htmlFor="esp-hora-fim" className="mb-1.5 block text-sm font-medium text-zinc-700">Hora de fim</label>
-                        <select
-                          id="esp-hora-fim"
-                          value={formData.hora_fim}
-                          onChange={(e) => setFormData({ ...formData, hora_fim: e.target.value })}
-                          className="min-h-12 w-full rounded-xl border border-zinc-300 bg-white px-3 py-3 text-base text-zinc-900 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
-                          required
-                        >
-                          <option value="">Selecione</option>
-                          {horas.map((h) => <option key={h} value={h}>{h}</option>)}
-                        </select>
+                        <GradeHorario opcoes={opcoesGrade} valor={formData.hora_fim} aoSelecionar={(h) => setFormData({ ...formData, hora_fim: h })} />
                       </div>
                     </>
                   )}
