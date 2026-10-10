@@ -310,7 +310,7 @@ Pedimos desculpas, mas tivemos uma alteração na agenda e não conseguiremos ma
 
 Você pode escolher um novo horário disponível pelo link:
 
-https://sistema-salao.vercel.app/agendar
+${(process.env.NEXT_PUBLIC_URL || 'http://localhost:8080')}/agendar
 
 Obrigada pela compreensão. 💛`)}`}
                       target="_blank"
