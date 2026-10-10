@@ -3,6 +3,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { BloqueioAgenda } from '@/lib/types';
 import { listarBloqueios, criarBloqueio, excluirBloqueio } from '@/app/actions/bloqueios';
+import GradeHorario from '@/components/grade-horarios';
+import { gerarGradeHorarios } from '@/lib/horarios';
 
 export default function BloqueiosPage() {
   const [bloqueios, setBloqueios] = useState<BloqueioAgenda[]>([]);
@@ -302,7 +304,15 @@ export default function BloqueiosPage() {
                   </div>
                   {c.whatsapp && (
                     <a
-                      href={`https://wa.me/${c.whatsapp.replace(/\D/g,'')}`}
+                      href={`https://wa.me/${c.whatsapp.replace(/\D/g,'')}?text=${encodeURIComponent(`Olá, ${c.cliente}! Tudo bem?
+
+Pedimos desculpas, mas tivemos uma alteração na agenda e não conseguiremos manter seu atendimento no horário de ${new Date(c.horario).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}.
+
+Você pode escolher um novo horário disponível pelo link:
+
+https://sistema-salao.vercel.app/agendar
+
+Obrigada pela compreensão. 💛`)}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="mt-2 inline-flex items-center gap-2 rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-emerald-600"

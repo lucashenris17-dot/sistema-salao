@@ -52,6 +52,7 @@ Implementar verificação de conflito ao criar bloqueio (`/admin/bloqueios`): co
 
 - ✅ `npx tsc --noEmit` — 0 erros.
 - ✅ `npm run build` — passa (14 rotas, incluindo `/admin/bloqueios`).
+- ✅ Botão WhatsApp no modal de conflito: link `wa.me/<numero>` com mensagem montada dinamicamente (`encodeURIComponent`): nome do cliente, horário do atendimento, link de agendamento (`https://sistema-salao.vercel.app/agendar`). Número limpo (`\D/g`). Não envia automaticamente.
 
 ---
 
