@@ -281,7 +281,12 @@ const carregar = useCallback(async () => {
       }
 
       const lista = (data || []) as AtendimentoDia[];
-      const hoje = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Recife', year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-');
+      const hoje = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Recife',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(new Date());
 
       // ── Atendimentos de hoje ──────────────────────────────────────────────
       const listaHoje = lista.filter((x) => {

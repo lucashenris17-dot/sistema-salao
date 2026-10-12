@@ -41,6 +41,8 @@ export async function listarSolicitacoesPendentes(): Promise<AcaoResponse<Solici
         id,
         horario_agendado,
         criado_em,
+        procedimento_id,
+        procedimento_ids,
         clientes:cliente_id (
           nome,
           sobrenome,
@@ -52,7 +54,7 @@ export async function listarSolicitacoesPendentes(): Promise<AcaoResponse<Solici
         )
       `)
       .eq('status_confirmacao', 'pendente')
-      .order('horario_agendado', { ascending: true });
+      .order('criado_em', { ascending: true });
 
     if (error) {
       return {
@@ -61,16 +63,35 @@ export async function listarSolicitacoesPendentes(): Promise<AcaoResponse<Solici
       };
     }
 
-    const solicitacoes: SolicitacaoPendente[] = (data || []).map((item: any) => ({
+    const rows = (data || []) as any[];
+    const idsProcedimentos = [...new Set(rows.flatMap((item) =>
+      Array.isArray(item.procedimento_ids) && item.procedimento_ids.length
+        ? item.procedimento_ids
+        : [item.procedimento_id]
+    ).filter(Boolean))];
+    const { data: dadosProcedimentos, error: erroProcedimentos } = idsProcedimentos.length
+      ? await supabase.from('procedimentos').select('id, nome, duracao_estimada_min').in('id', idsProcedimentos)
+      : { data: [], error: null };
+    if (erroProcedimentos) return { sucesso: false, erro: erroProcedimentos.message };
+    const procedimentosPorId = new Map((dadosProcedimentos || []).map((procedimento) => [procedimento.id, procedimento]));
+
+    const solicitacoes: SolicitacaoPendente[] = rows.map((item: any) => {
+      const ids = Array.isArray(item.procedimento_ids) && item.procedimento_ids.length
+        ? item.procedimento_ids
+        : [item.procedimento_id];
+      const procedimentos = ids.map((id: string) => procedimentosPorId.get(id)).filter(Boolean) as { id: string; nome: string; duracao_estimada_min: number }[];
+      return {
       id: item.id,
       cliente_nome: item.clientes?.nome || '',
       cliente_sobrenome: item.clientes?.sobrenome || '',
       cliente_whatsapp: item.clientes?.whatsapp || '',
-      procedimento_nome: item.procedimentos?.nome || '',
-      procedimento_duracao_min: item.procedimentos?.duracao_estimada_min || 0,
+      procedimento_nome: procedimentos.map((procedimento) => procedimento.nome).join(', ') || item.procedimentos?.nome || '',
+      procedimento_duracao_min: procedimentos.reduce((total, procedimento) => total + (procedimento.duracao_estimada_min || 0), 0) || item.procedimentos?.duracao_estimada_min || 0,
+      procedimentos,
       horario_solicitado: item.horario_agendado || '',
       criado_em: item.criado_em || '',
-    }));
+    };
+    });
 
     return {
       sucesso: true,

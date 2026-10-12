@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { BloqueioAgenda } from '@/lib/types';
-import { listarBloqueios, criarBloqueio, excluirBloqueio } from '@/app/actions/bloqueios';
+import { listarBloqueios, criarBloqueio, atualizarBloqueio, excluirBloqueio } from '@/app/actions/bloqueios';
 import GradeHorario from '@/components/grade-horarios';
 import { gerarGradeHorarios } from '@/lib/horarios';
 
@@ -11,6 +11,7 @@ export default function BloqueiosPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [bloqueioEditando, setBloqueioEditando] = useState<BloqueioAgenda | null>(null);
 
   // Aba ativa: 'semanal_fixo' | 'temporario' | 'especifico'
   const [aba, setAba] = useState<'semanal_fixo' | 'temporario' | 'especifico'>('semanal_fixo');
@@ -133,7 +134,9 @@ export default function BloqueiosPage() {
         payload.data_inicio = formData.data_especifica;
       }
 
-      const resultado = await criarBloqueio(payload);
+      const resultado = bloqueioEditando
+        ? await atualizarBloqueio(bloqueioEditando.id, { ...payload, ignorarConflito: manterConflito })
+        : await criarBloqueio(payload);
 
       if (!resultado.sucesso) {
         const dados = (resultado as any).dados;
@@ -145,7 +148,7 @@ export default function BloqueiosPage() {
           setSalvando(false);
           return;
         }
-        setError(resultado.erro || 'Erro ao criar bloqueio');
+        setError(resultado.erro || (bloqueioEditando ? 'Erro ao atualizar bloqueio' : 'Erro ao criar bloqueio'));
         return;
       }
 
@@ -159,6 +162,7 @@ export default function BloqueiosPage() {
         descricao: '',
       });
       setShowForm(false);
+      setBloqueioEditando(null);
       await carregarBloqueios();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao criar bloqueio');
@@ -183,7 +187,9 @@ export default function BloqueiosPage() {
       if (aba === 'temporario') { payload.data_inicio = formData.data_inicio; payload.data_fim = formData.data_fim; }
       if (aba === 'especifico') payload.data_inicio = formData.data_especifica;
 
-      const resultado = await criarBloqueio(payload);
+      const resultado = bloqueioEditando
+        ? await atualizarBloqueio(bloqueioEditando.id, payload)
+        : await criarBloqueio(payload);
       if (!resultado.sucesso) {
         setError(resultado.erro || 'Erro ao salvar bloqueio');
         setManterConflito(false);
@@ -191,6 +197,7 @@ export default function BloqueiosPage() {
       }
       setFormData({ dias_semana: [], hora_inicio: '', hora_fim: '', data_inicio: '', data_fim: '', data_especifica: '', descricao: '' });
       setShowForm(false);
+      setBloqueioEditando(null);
       await carregarBloqueios();
       setError(null);
     } catch (err) {
@@ -220,6 +227,7 @@ export default function BloqueiosPage() {
 
   function handleCancelar() {
     setShowForm(false);
+    setBloqueioEditando(null);
     setFormData({
       dias_semana: [],
       hora_inicio: '',
@@ -230,6 +238,33 @@ export default function BloqueiosPage() {
       descricao: '',
     });
     setError(null);
+  }
+
+  function handleEditar(bloqueio: BloqueioAgenda) {
+    const tipo = bloqueio.tipo || 'especifico';
+    setAba(tipo);
+    setBloqueioEditando(bloqueio);
+    setFormData({
+      dias_semana: bloqueio.dias_semana || [],
+      hora_inicio: bloqueio.hora_inicio || bloqueio.inicio?.split('T')[1]?.slice(0, 5) || '',
+      hora_fim: bloqueio.hora_fim || bloqueio.fim?.split('T')[1]?.slice(0, 5) || '',
+      data_inicio: bloqueio.data_inicio || bloqueio.inicio?.slice(0, 10) || '',
+      data_fim: bloqueio.data_fim || bloqueio.fim?.slice(0, 10) || '',
+      data_especifica: bloqueio.data_inicio || bloqueio.inicio?.slice(0, 10) || '',
+      descricao: bloqueio.descricao || '',
+    });
+    setError(null);
+    setShowForm(true);
+  }
+
+  function formatarDataBrasileira(data: string | null | undefined): string {
+    if (!data) return '-';
+    const [ano, mes, dia] = data.slice(0, 10).split('-');
+    return ano && mes && dia ? dia + '/' + mes + '/' + ano : data;
+  }
+
+  function formatarHora(hora: string | null | undefined): string {
+    return hora ? hora.slice(0, 5) : '-';
   }
 
   function formatarDataHora(isoString: string | null): string {
@@ -274,6 +309,44 @@ export default function BloqueiosPage() {
   const diasSemanaLabels = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
   const opcoesGrade = useMemo(() => gerarGradeHorarios().map((h) => ({ horaStr: h, disponivel: true, bloqueado: false })), []);
 
+  // Cards de seleção de data (mesmo padrão visual de /agendar)
+  const diasDisponiveis = useMemo(() => {
+    const dias: { iso: string; diaSemana: string; diaNumero: string; mesNome: string; dataObj: Date }[] = [];
+    const hoje = new Date();
+    const diasSemana = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
+    const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    for (let i = 0; i < 15; i++) {
+      const dataObj = new Date(hoje);
+      dataObj.setDate(hoje.getDate() + i);
+      const ano = dataObj.getFullYear();
+      const mes = String(dataObj.getMonth() + 1).padStart(2, '0');
+      const diaNum = String(dataObj.getDate()).padStart(2, '0');
+      const isoData = `${ano}-${mes}-${diaNum}`;
+      dias.push({
+        iso: isoData,
+        diaSemana: diasSemana[dataObj.getDay()],
+        diaNumero: diaNum,
+        mesNome: meses[dataObj.getMonth()],
+        dataObj,
+      });
+    }
+    const atuais = [formData.data_inicio, formData.data_fim, formData.data_especifica]
+      .filter(Boolean)
+      .filter((iso) => !dias.some((dia) => dia.iso === iso));
+    for (const iso of atuais) {
+      const [ano, mes, diaNum] = iso.split('-').map(Number);
+      const dataObj = new Date(ano, mes - 1, diaNum);
+      dias.push({
+        iso,
+        diaSemana: diasSemana[dataObj.getDay()],
+        diaNumero: String(diaNum).padStart(2, '0'),
+        mesNome: meses[mes - 1],
+        dataObj,
+      });
+    }
+    return dias;
+  }, [formData.data_inicio, formData.data_fim, formData.data_especifica]);
+
   return (
     <div className="min-h-screen min-w-0 bg-zinc-50 text-zinc-900">
       <div className="mx-auto w-full min-w-0 max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
@@ -286,7 +359,7 @@ export default function BloqueiosPage() {
           {!showForm && (
             <button
               type="button"
-              onClick={() => setShowForm(true)}
+              onClick={() => { setBloqueioEditando(null); setShowForm(true); setError(null); }}
               className="inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-xl bg-amber-400 px-5 py-3 text-sm font-semibold text-zinc-900 shadow-sm transition hover:bg-amber-300 active:scale-[0.99] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900"
             >
               <svg aria-hidden="true" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
@@ -337,7 +410,7 @@ Obrigada pela compreensão. 💛`)}`}
                 disabled={salvando}
                 className="min-h-12 flex-1 rounded-xl bg-amber-400 px-5 py-3 text-sm font-semibold text-zinc-900 shadow-sm transition hover:bg-amber-300 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900"
               >
-                {salvando ? 'Salvando...' : 'Manter bloqueio'}
+                {salvando ? 'Salvando...' : bloqueioEditando ? 'Manter alterações' : 'Manter bloqueio'}
               </button>
               <button
                 type="button"
@@ -437,25 +510,49 @@ Obrigada pela compreensão. 💛`)}`}
                     <>
                       <div>
                         <label htmlFor="temp-data-inicio" className="mb-1.5 block text-sm font-medium text-zinc-700">Data de início</label>
-                        <input
-                          id="temp-data-inicio"
-                          type="date"
-                          value={formData.data_inicio}
-                          onChange={(e) => setFormData({ ...formData, data_inicio: e.target.value })}
-                          className="min-h-12 w-full rounded-xl border border-zinc-300 bg-white px-3 py-3 text-base text-zinc-900 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
-                          required
-                        />
+                        <div className="flex gap-2.5 overflow-x-auto pb-2 snap-x scrollbar-none">
+                          {diasDisponiveis.map((dia) => {
+                            const selected = formData.data_inicio === dia.iso;
+                            return (
+                              <button
+                                key={dia.iso}
+                                type="button"
+                                onClick={() => setFormData({ ...formData, data_inicio: dia.iso })}
+                                className={`snap-start flex-shrink-0 min-w-[72px] p-3 rounded-xl border text-center transition-all ${selected ? 'border-zinc-900 bg-zinc-900 text-white shadow-md' : 'border-zinc-200 bg-zinc-50 text-zinc-800 hover:border-zinc-300'}`}
+                              >
+                                <span className={`block text-[11px] font-bold uppercase tracking-wide ${selected ? 'text-amber-400' : 'text-zinc-500'}`}>{dia.diaSemana}</span>
+                                <span className="block text-xl font-extrabold my-0.5">{dia.diaNumero}</span>
+                                <span className={`block text-[10px] font-medium ${selected ? 'text-zinc-300' : 'text-zinc-400'}`}>{dia.mesNome}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {formData.data_inicio && (
+                          <p className="mt-2 text-xs text-zinc-500">Selecionado: <span className="font-semibold text-zinc-800">{diasDisponiveis.find(d => d.iso === formData.data_inicio)?.diaSemana}, {diasDisponiveis.find(d => d.iso === formData.data_inicio)?.diaNumero} {diasDisponiveis.find(d => d.iso === formData.data_inicio)?.mesNome}</span></p>
+                        )}
                       </div>
                       <div>
                         <label htmlFor="temp-data-fim" className="mb-1.5 block text-sm font-medium text-zinc-700">Data de fim</label>
-                        <input
-                          id="temp-data-fim"
-                          type="date"
-                          value={formData.data_fim}
-                          onChange={(e) => setFormData({ ...formData, data_fim: e.target.value })}
-                          className="min-h-12 w-full rounded-xl border border-zinc-300 bg-white px-3 py-3 text-base text-zinc-900 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
-                          required
-                        />
+                        <div className="flex gap-2.5 overflow-x-auto pb-2 snap-x scrollbar-none">
+                          {diasDisponiveis.map((dia) => {
+                            const selected = formData.data_fim === dia.iso;
+                            return (
+                              <button
+                                key={dia.iso}
+                                type="button"
+                                onClick={() => setFormData({ ...formData, data_fim: dia.iso })}
+                                className={`snap-start flex-shrink-0 min-w-[72px] p-3 rounded-xl border text-center transition-all ${selected ? 'border-zinc-900 bg-zinc-900 text-white shadow-md' : 'border-zinc-200 bg-zinc-50 text-zinc-800 hover:border-zinc-300'}`}
+                              >
+                                <span className={`block text-[11px] font-bold uppercase tracking-wide ${selected ? 'text-amber-400' : 'text-zinc-500'}`}>{dia.diaSemana}</span>
+                                <span className="block text-xl font-extrabold my-0.5">{dia.diaNumero}</span>
+                                <span className={`block text-[10px] font-medium ${selected ? 'text-zinc-300' : 'text-zinc-400'}`}>{dia.mesNome}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {formData.data_fim && (
+                          <p className="mt-2 text-xs text-zinc-500">Selecionado: <span className="font-semibold text-zinc-800">{diasDisponiveis.find(d => d.iso === formData.data_fim)?.diaSemana}, {diasDisponiveis.find(d => d.iso === formData.data_fim)?.diaNumero} {diasDisponiveis.find(d => d.iso === formData.data_fim)?.mesNome}</span></p>
+                        )}
                       </div>
                       <div>
                         <label htmlFor="temp-hora-inicio" className="mb-1.5 block text-sm font-medium text-zinc-700">Hora de início</label>
@@ -471,15 +568,27 @@ Obrigada pela compreensão. 💛`)}`}
                   {aba === 'especifico' && (
                     <>
                       <div>
-                        <label htmlFor="esp-data" className="mb-1.5 block text-sm font-medium text-zinc-700">Data</label>
-                        <input
-                          id="esp-data"
-                          type="date"
-                          value={formData.data_especifica}
-                          onChange={(e) => setFormData({ ...formData, data_especifica: e.target.value })}
-                          className="min-h-12 w-full rounded-xl border border-zinc-300 bg-white px-3 py-3 text-base text-zinc-900 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
-                          required
-                        />
+                        <label htmlFor="esp-data" className="mb-1.5 block text-sm font-medium text-zinc-700">Data específica</label>
+                        <div className="flex gap-2.5 overflow-x-auto pb-2 snap-x scrollbar-none">
+                          {diasDisponiveis.map((dia) => {
+                            const selected = formData.data_especifica === dia.iso;
+                            return (
+                              <button
+                                key={dia.iso}
+                                type="button"
+                                onClick={() => setFormData({ ...formData, data_especifica: dia.iso })}
+                                className={`snap-start flex-shrink-0 min-w-[72px] p-3 rounded-xl border text-center transition-all ${selected ? 'border-zinc-900 bg-zinc-900 text-white shadow-md' : 'border-zinc-200 bg-zinc-50 text-zinc-800 hover:border-zinc-300'}`}
+                              >
+                                <span className={`block text-[11px] font-bold uppercase tracking-wide ${selected ? 'text-amber-400' : 'text-zinc-500'}`}>{dia.diaSemana}</span>
+                                <span className="block text-xl font-extrabold my-0.5">{dia.diaNumero}</span>
+                                <span className={`block text-[10px] font-medium ${selected ? 'text-zinc-300' : 'text-zinc-400'}`}>{dia.mesNome}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {formData.data_especifica && (
+                          <p className="mt-2 text-xs text-zinc-500">Selecionado: <span className="font-semibold text-zinc-800">{diasDisponiveis.find(d => d.iso === formData.data_especifica)?.diaSemana}, {diasDisponiveis.find(d => d.iso === formData.data_especifica)?.diaNumero} {diasDisponiveis.find(d => d.iso === formData.data_especifica)?.mesNome}</span></p>
+                        )}
                       </div>
                       <div>
                         <label htmlFor="esp-hora-inicio" className="mb-1.5 block text-sm font-medium text-zinc-700">Hora de início</label>
@@ -571,7 +680,7 @@ Obrigada pela compreensão. 💛`)}`}
                   </div>
                 </div>
 
-                <dl className="mb-4 grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 sm:grid-cols-2">
+                {bloqueio.tipo !== 'semanal_fixo' && <dl className="mb-4 grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 sm:grid-cols-2">
                   <div className="min-w-0">
                     <dt className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Início · {formatarDiaSemana(bloqueio.inicio)}</dt>
                     <dd className="mt-1 break-words text-sm font-semibold text-zinc-900">{formatarDataHora(bloqueio.inicio)}</dd>
@@ -580,14 +689,14 @@ Obrigada pela compreensão. 💛`)}`}
                     <dt className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Fim · {formatarDiaSemana(bloqueio.fim)}</dt>
                     <dd className="mt-1 break-words text-sm font-semibold text-zinc-900">{formatarDataHora(bloqueio.fim)}</dd>
                   </div>
-                </dl>
+                </dl>}
 
                 <div className="mb-3 rounded-xl border border-zinc-200 bg-white p-3 text-xs text-zinc-600 space-y-1">
                   {bloqueio.tipo === 'semanal_fixo' && bloqueio.dias_semana && (
-                    <p><strong>Dias fixos:</strong> {bloqueio.dias_semana.map(d => diasSemanaLabels[d]).join(', ')}</p>
+                    <><p><strong>Dias fixos:</strong> {bloqueio.dias_semana.map(d => diasSemanaLabels[d]).join(', ')}</p><p><strong>Repete:</strong> Toda semana</p></>
                   )}
                   {bloqueio.tipo === 'temporario' && (
-                    <><p><strong>Temporário:</strong> {bloqueio.data_inicio || '-'} até {bloqueio.data_fim || '-'}</p></>
+                    <p><strong>Datas:</strong> {formatarDataBrasileira(bloqueio.data_inicio)} ? {formatarDataBrasileira(bloqueio.data_fim)}</p>
                   )}
                   {bloqueio.tipo === 'especifico' && (bloqueio.data_inicio) && (
                     <p><strong>Data específica:</strong> {bloqueio.data_inicio}</p>
@@ -603,6 +712,13 @@ Obrigada pela compreensão. 💛`)}`}
                     className="min-h-12 rounded-xl border border-red-200 bg-white px-5 py-3 text-sm font-semibold text-red-700 transition hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700"
                   >
                     Excluir bloqueio
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleEditar(bloqueio)}
+                    className="min-h-12 rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-semibold text-zinc-800 transition hover:bg-zinc-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900"
+                  >
+                    Editar
                   </button>
                 </div>
               </article>

@@ -15,6 +15,8 @@ type BloqueioItem = Pick<
 
 interface AtendimentoItem {
   horario_agendado: string | null;
+  procedimento_ids?: string[] | null;
+  procedimento_id?: string | null;
   procedimentos?: {
     duracao_estimada_min: number;
   } | null;
@@ -54,7 +56,7 @@ export default function AgendarPage() {
     nome: '',
     sobrenome: '',
     whatsapp: '',
-    procedimento_id: '',
+    procedimento_ids: [] as string[],
     data: '', // YYYY-MM-DD
     hora: '', // HH:mm
   });
@@ -79,7 +81,7 @@ export default function AgendarPage() {
         // 2. Bloqueios de agenda
         const { data: bloqData, error: bloqErr } = await supabase
           .from('bloqueios_agenda')
-          .select('tipo, dias_semana, hora_inicio, hora_fim, inicio, fim');
+          .select('tipo, dias_semana, data_inicio, data_fim, hora_inicio, hora_fim, inicio, fim');
 
         if (bloqErr) throw bloqErr;
         setBloqueios(bloqData || []);
@@ -89,6 +91,8 @@ export default function AgendarPage() {
           .from('atendimentos')
           .select(`
             horario_agendado,
+            procedimento_id,
+            procedimento_ids,
             procedimentos (
               duracao_estimada_min
             )
@@ -97,7 +101,15 @@ export default function AgendarPage() {
           .eq('status_confirmacao', 'confirmado')
           .not('horario_agendado', 'is', null);
 
-        setAtendimentosOcupados((atendsData as unknown as AtendimentoItem[]) || []);
+        const atendimentos = (atendsData as unknown as AtendimentoItem[]) || [];
+        const duracaoPorId = new Map((procsData || []).map((p) => [p.id, p.duracao_estimada_min || 0]));
+        setAtendimentosOcupados(atendimentos.map((atendimento) => {
+          const ids = atendimento.procedimento_ids?.length
+            ? atendimento.procedimento_ids
+            : atendimento.procedimento_id ? [atendimento.procedimento_id] : [];
+          const duracaoTotal = ids.reduce((total, id) => total + (duracaoPorId.get(id) || 0), 0);
+          return { ...atendimento, procedimento_duracao_total_min: duracaoTotal || undefined };
+        }));
       } catch (err) {
         setError(
           err instanceof Error
@@ -112,10 +124,14 @@ export default function AgendarPage() {
     carregarDados();
   }, [supabase]);
 
-  // Procedimento selecionado
-  const procedimentoSelecionado = useMemo(() => {
-    return procedimentos.find((p) => p.id === formData.procedimento_id) || null;
-  }, [procedimentos, formData.procedimento_id]);
+  // Procedimentos selecionados (múltiplos)
+  const procedimentosSelecionados = useMemo(() => {
+    return procedimentos.filter((p) => formData.procedimento_ids.includes(p.id));
+  }, [procedimentos, formData.procedimento_ids]);
+
+  const duracaoTotal = useMemo(() => {
+    return procedimentosSelecionados.reduce((sum, p) => sum + (p.duracao_estimada_min || 0), 0);
+  }, [procedimentosSelecionados]);
 
   // Gerar os próximos 14 dias para os cards de seleção de data
   const diasDisponiveis = useMemo(() => {
@@ -170,7 +186,7 @@ export default function AgendarPage() {
 
   const todosHorarios = useMemo(() => {
     if (!formData.data) return [];
-    const duracaoMin = procedimentoSelecionado?.duracao_estimada_min || 30;
+    const duracaoMin = duracaoTotal || 30;
     // Lógica centralizada em src/lib/horarios.ts — usada também no painel admin.
     const opcoes = calcularGradeHorario(
       formData.data,
@@ -179,7 +195,7 @@ export default function AgendarPage() {
       atendimentosOcupados as any[],
     );
     return opcoes;
-  }, [formData.data, procedimentoSelecionado, bloqueios, atendimentosOcupados]);
+  }, [formData.data, duracaoTotal, bloqueios, atendimentosOcupados]);
 
   // Avançar Etapa 1
   function handleEtapa1Continuar(e: React.FormEvent) {
@@ -208,7 +224,7 @@ export default function AgendarPage() {
   // Avançar Etapa 2
   function handleEtapa2Continuar() {
     setError(null);
-    if (!formData.procedimento_id) {
+    if (formData.procedimento_ids.length === 0) {
       setError('Selecione um procedimento para continuar.');
       return;
     }
@@ -269,7 +285,7 @@ export default function AgendarPage() {
         nome: formData.nome.trim(),
         sobrenome: formData.sobrenome.trim(),
         whatsapp: formData.whatsapp.replace(/\D/g, '').slice(0, 11),
-        procedimento_id: formData.procedimento_id,
+        procedimento_ids: formData.procedimento_ids,
         horario_agendado: horarioAgendadoIso,
       });
 
@@ -491,7 +507,7 @@ export default function AgendarPage() {
                                   setError('Procedimento do último atendimento não encontrado. Escolha outro.');
                                   return;
                                 }
-                                setFormData({ ...formData, procedimento_id: procId });
+                                setFormData({ ...formData, procedimento_ids: [procId] });
                                 setEtapa(3);
                               }}
                               className="min-h-11 w-full rounded-xl bg-zinc-900 py-3 text-sm font-semibold text-white hover:bg-zinc-800 transition-colors"
@@ -547,14 +563,17 @@ export default function AgendarPage() {
                     </p>
                   ) : (
                     procedimentos.map((proc) => {
-                      const isSelected = formData.procedimento_id === proc.id;
+                      const isSelected = formData.procedimento_ids.includes(proc.id);
                       return (
                         <button
                           key={proc.id}
                           type="button"
-                          onClick={() =>
-                            setFormData({ ...formData, procedimento_id: proc.id })
-                          }
+                          onClick={() => {
+                            const novo = isSelected
+                              ? formData.procedimento_ids.filter((id) => id !== proc.id)
+                              : [...formData.procedimento_ids, proc.id];
+                            setFormData({ ...formData, procedimento_ids: novo });
+                          }}
                           className={`w-full text-left p-4 rounded-xl border transition-all flex items-center justify-between min-h-16 ${
                             isSelected
                               ? 'border-zinc-900 bg-zinc-900 text-white shadow-md'
@@ -604,7 +623,7 @@ export default function AgendarPage() {
                   <button
                     type="button"
                     onClick={handleEtapa2Continuar}
-                    disabled={!formData.procedimento_id}
+                    disabled={formData.procedimento_ids.length === 0}
                     className="min-h-12 flex-[2] rounded-xl bg-zinc-900 py-3.5 text-base font-semibold text-white transition-transform active:scale-[0.99] shadow-sm hover:bg-zinc-800 disabled:opacity-50"
                   >
                     Continuar
@@ -741,7 +760,7 @@ export default function AgendarPage() {
                         Procedimento
                       </p>
                       <p className="text-base font-bold text-zinc-900 mt-0.5 flex items-center gap-1.5">
-                        <span>✂️</span> {procedimentoSelecionado?.nome}
+                        <span>✂️</span> {procedimentosSelecionados.map(p => p.nome).join(', ') || '—'}
                       </p>
                     </div>
                     <div className="text-right">
@@ -749,7 +768,7 @@ export default function AgendarPage() {
                         Duração
                       </p>
                       <p className="text-sm font-bold text-zinc-800 mt-0.5">
-                        {procedimentoSelecionado?.duracao_estimada_min} minutos
+                        {duracaoTotal} minutos
                       </p>
                     </div>
                   </div>

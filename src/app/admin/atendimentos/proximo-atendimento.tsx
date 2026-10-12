@@ -72,7 +72,9 @@ export default function ProximoAtendimento({
                 .filter(Boolean).join(' ') || 'Cliente não informado'}
             </p>
             <p className="mt-2 break-words text-sm text-zinc-300">
-              {proximo.procedimentos?.nome || 'Procedimento não informado'}
+              {(proximo.procedimentos_multi && proximo.procedimentos_multi.length > 0)
+                ? proximo.procedimentos_multi.map((p) => p.nome).join(', ')
+                : (proximo.procedimentos?.nome || 'Procedimento não informado')}
             </p>
           </div>
           <time

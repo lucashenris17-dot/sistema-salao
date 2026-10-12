@@ -133,6 +133,7 @@ export default function AcompanharPage({ params }: { params: Promise<{ token: st
     id,
     cliente_id,
     procedimento_id,
+    procedimento_ids,
     modo,
     status,
     horario_agendado,
@@ -147,6 +148,25 @@ export default function AcompanharPage({ params }: { params: Promise<{ token: st
 .in('status', ['aguardando', 'em_andamento', 'pausado'])
 .order('criado_em', { ascending: true });
 
+const procedimentoIds = Array.from(new Set(
+  (filaData || []).flatMap((f: any) =>
+    Array.isArray(f.procedimento_ids) && f.procedimento_ids.length > 0
+      ? f.procedimento_ids
+      : f.procedimento_id
+        ? [f.procedimento_id]
+        : []
+  )
+));
+const { data: procedimentosData } = procedimentoIds.length > 0
+  ? await supabase
+      .from('procedimentos')
+      .select('id, duracao_estimada_min')
+      .in('id', procedimentoIds)
+  : { data: [] };
+const duracoesPorProcedimento = new Map(
+  (procedimentosData || []).map((p: any) => [p.id, p.duracao_estimada_min || 0])
+);
+
 const calcInputs = (filaData || []).map((f: any) => ({
   id: f.id,
   modo: f.modo,
@@ -157,7 +177,17 @@ const calcInputs = (filaData || []).map((f: any) => ({
   ordem_fila: f.ordem_fila,
   criado_em: f.criado_em,
   procedimento: {
-    duracao_estimada_min: f.procedimentos?.duracao_estimada_min || 0
+    duracao_estimada_min: (
+      Array.isArray(f.procedimento_ids) && f.procedimento_ids.length > 0
+        ? f.procedimento_ids
+        : f.procedimento_id
+          ? [f.procedimento_id]
+          : []
+    ).reduce(
+      (total: number, procedimentoId: string) =>
+        total + (duracoesPorProcedimento.get(procedimentoId) || 0),
+      0
+    ) || f.procedimentos?.duracao_estimada_min || 0
   },
   duracao_trabalhada_seg: f.duracao_trabalhada_seg,
   pausado_desde: f.pausado_desde,

@@ -240,6 +240,75 @@ export async function criarBloqueio(
   }
 }
 
+/** Atualiza uma regra de bloqueio existente, preservando a confirmação de conflitos. */
+export async function atualizarBloqueio(
+  id: string,
+  input: BloqueioRegraInput
+): Promise<AcaoResponse<BloqueioAgenda>> {
+  try {
+    if (!id) return { sucesso: false, erro: 'ID do bloqueio é obrigatório' };
+    if (!input.descricao?.trim()) return { sucesso: false, erro: 'Motivo é obrigatório' };
+    const tipo = input.tipo || 'especifico';
+    if (!input.hora_inicio || !input.hora_fim || input.hora_fim <= input.hora_inicio) {
+      return { sucesso: false, erro: 'Hora de fim deve ser posterior à hora de início' };
+    }
+    if (tipo === 'semanal_fixo' && !input.dias_semana?.length) return { sucesso: false, erro: 'Selecione pelo menos um dia' };
+    if (tipo === 'temporario' && (!input.data_inicio || !input.data_fim || input.data_fim < input.data_inicio)) {
+      return { sucesso: false, erro: 'Data inicial e final são obrigatórias e válidas' };
+    }
+    if (tipo === 'especifico' && !input.data_inicio) return { sucesso: false, erro: 'Data específica é obrigatória' };
+
+    const sb = await createSupabaseClient();
+    const referencia = tipo === 'temporario' || tipo === 'especifico' ? input.data_inicio! : (() => {
+      const hoje = new Date();
+      const diasAte = (input.dias_semana![0] - hoje.getDay() + 7) % 7 || 7;
+      hoje.setDate(hoje.getDate() + diasAte);
+      return `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`;
+    })();
+    const dataFim = tipo === 'temporario' ? input.data_fim! : referencia;
+    const inicio = new Date(`${referencia}T${input.hora_inicio}:00-03:00`);
+    const fim = new Date(`${dataFim}T${input.hora_fim}:00-03:00`);
+    const statusAtivos = ['aguardando', 'em_andamento', 'pausado'];
+    const { data: atendimentos } = await sb.from('atendimentos')
+      .select('id, cliente_id, horario_agendado, procedimento_id, status')
+      .in('status', statusAtivos)
+      .gte('horario_agendado', new Date(inicio.getTime() - 4 * 60 * 60 * 1000).toISOString())
+      .lte('horario_agendado', fim.toISOString());
+    const registros = atendimentos || [];
+    const procIds = [...new Set(registros.map((a: any) => a.procedimento_id).filter(Boolean))];
+    const cliIds = [...new Set(registros.map((a: any) => a.cliente_id).filter(Boolean))];
+    const [{ data: procs }, { data: clientes }] = await Promise.all([
+      procIds.length ? sb.from('procedimentos').select('id,nome,duracao_estimada_min').in('id', procIds) : Promise.resolve({ data: [] }),
+      cliIds.length ? sb.from('clientes').select('id,nome,sobrenome,whatsapp').in('id', cliIds) : Promise.resolve({ data: [] }),
+    ]);
+    const procMap = new Map((procs || []).map((p: any) => [p.id, p]));
+    const cliMap = new Map((clientes || []).map((c: any) => [c.id, c]));
+    const conflitos = registros.flatMap((a: any) => {
+      const atInicio = new Date(a.horario_agendado);
+      const proc: any = procMap.get(a.procedimento_id);
+      const atFim = new Date(atInicio.getTime() + (proc?.duracao_estimada_min || 0) * 60000);
+      if (atInicio > fim || atFim <= inicio) return [];
+      const cli: any = cliMap.get(a.cliente_id);
+      return [{ cliente: `${cli?.nome || ''} ${cli?.sobrenome || ''}`.trim() || 'Cliente', whatsapp: cli?.whatsapp || '', horario: a.horario_agendado, procedimento: proc?.nome || '—' }];
+    });
+    if (conflitos.length && !input.ignorarConflito) {
+      return { sucesso: false, erro: 'Conflito com atendimentos existentes', dados: { conflito: true, atendimentos: conflitos } } as any;
+    }
+    const dados: any = {
+      tipo, descricao: input.descricao.trim(), dias_semana: tipo === 'semanal_fixo' ? input.dias_semana : null,
+      data_inicio: tipo === 'semanal_fixo' ? null : input.data_inicio,
+      data_fim: tipo === 'temporario' ? input.data_fim : null,
+      hora_inicio: input.hora_inicio, hora_fim: input.hora_fim,
+      inicio: inicio.toISOString(), fim: fim.toISOString(),
+    };
+    const { data, error } = await sb.from('bloqueios_agenda').update(dados).eq('id', id).select().single();
+    if (error) return { sucesso: false, erro: error.message };
+    return { sucesso: true, dados, mensagem: 'Bloqueio atualizado com sucesso' };
+  } catch (error) {
+    return { sucesso: false, erro: error instanceof Error ? error.message : 'Erro ao atualizar bloqueio' };
+  }
+}
+
 /**
  * Exclui bloqueio de agenda
  */

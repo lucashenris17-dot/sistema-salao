@@ -1,1 +1,3 @@
 - [realtime-broadcast-publico](memory.md) — Broadcast privado por token via realtime.send() — canal acompanhar-<token>, policy...
+- [admin-atendimentos-multi-procedimento](docs/ia/05-ULTIMA-SESSAO.md) — Listagem compatível com registros antigos/status_confirmacao nulo; cadastro admin aceita até dois procedimentos; telefone suporta 16 caracteres.
+- [Diagnóstico horários vermelhos /agendar](docs/ia/05-ULTIMA-SESSAO.md) — Vermelho pode significar bloqueio, atendimento confirmado (duração total) ou horário passado; não investigar somente `bloqueios_agenda` nem remover regras sem conferir dados remotos.

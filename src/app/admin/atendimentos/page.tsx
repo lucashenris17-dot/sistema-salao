@@ -22,6 +22,7 @@ export interface AtendimentoListItem {
   status_confirmacao?: string;
   horario_agendado?: string;
   ordem_fila?: number;
+  procedimento_ids?: string[] | null;
   motivo_cancelamento?: string;
   token_acesso?: string;
   criado_em: string;
@@ -33,6 +34,12 @@ export interface AtendimentoListItem {
   whatsapp: string;
 };
   procedimentos?: { nome: string; duracao_estimada_min?: number };
+  /**
+   * Todos os procedimentos do atendimento (múltiplos).
+   * Preenchido via atendimento_procedimentos (PARTE 2).
+   * Retrocompatibilidade: atendimentos antigos só têm procedimento_id.
+   */
+  procedimentos_multi?: { id: string; nome: string; duracao_estimada_min?: number }[];
 }
 
 export default function AtendimentosPage() {
@@ -48,7 +55,7 @@ export default function AtendimentosPage() {
     { id: string; nome: string; sobrenome: string }[]
   >([]);
   const [procedimentos, setProcedimentos] = useState<
-    { id: string; nome: string }[]
+    { id: string; nome: string; duracao_estimada_min?: number }[]
   >([]);
 
   const [loading, setLoading] = useState(true);
@@ -61,6 +68,7 @@ export default function AtendimentosPage() {
   const [formData, setFormData] = useState({
     cliente_id: '',
     procedimento_id: '',
+    procedimento_ids: [] as string[],
     modo: 'agendamento' as 'agendamento' | 'fila',
     ordem_fila: 1,
   });
@@ -74,6 +82,24 @@ export default function AtendimentosPage() {
   const [filtroTab, setFiltroTab] = useState<'hoje' | 'semana' | 'finalizados'>('hoje');
   const [dataAgendamento, setDataAgendamento] = useState('');
   const [horaAgendamento, setHoraAgendamento] = useState('');
+
+  const dataNoFuso = (valor: string | Date) => new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Recife', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(typeof valor === 'string' ? new Date(valor) : valor);
+
+  const atendimentosDaAba = useMemo(() => {
+    const hoje = dataNoFuso(new Date());
+    const [ano, mes, dia] = hoje.split('-').map(Number);
+    const diaSemana = new Date(Date.UTC(ano, mes - 1, dia)).getUTCDay();
+    const fimSemana = new Date(Date.UTC(ano, mes - 1, dia + 6 - diaSemana));
+    const fim = `${fimSemana.getUTCFullYear()}-${String(fimSemana.getUTCMonth() + 1).padStart(2, '0')}-${String(fimSemana.getUTCDate()).padStart(2, '0')}`;
+    if (filtroTab === 'finalizados') return atendimentos.filter((at) => at.status === 'finalizado');
+    return atendimentos.filter((at) => {
+      if (!at.horario_agendado || at.status === 'finalizado' || at.status === 'cancelado' || at.status === 'no_show') return false;
+      const data = dataNoFuso(at.horario_agendado);
+      return filtroTab === 'hoje' ? data === hoje : data >= hoje && data <= fim;
+    });
+  }, [atendimentos, filtroTab]);
 
 
   const [cancelForm, setCancelForm] = useState({
@@ -134,7 +160,7 @@ export default function AtendimentosPage() {
 
       const { data: proc, error: errProc } = await supabase
         .from('procedimentos')
-        .select('id, nome')
+          .select('id, nome, duracao_estimada_min')
         .eq('ativo', true)
         .order('nome', { ascending: true });
 
@@ -154,12 +180,16 @@ export default function AtendimentosPage() {
 
   async function fetchAtendimentos() {
     try {
-      const { data, error: err } = await supabase
+      // A consulta da tabela de junção só existe após a migration multi-procedimento.
+      // Começar pelo modelo estável e resolver os procedimentos em uma consulta separada
+      // evita que a ausência da tabela/relacionamento esconda todos os atendimentos.
+      let { data, error: err } = await supabase
         .from('atendimentos')
         .select(`
           id,
           cliente_id,
           procedimento_id,
+          procedimento_ids,
           modo,
           status,
           status_confirmacao,
@@ -180,14 +210,78 @@ export default function AtendimentosPage() {
             duracao_estimada_min
           )
         `)
-        .eq('status_confirmacao', 'confirmado')
+        .or('status_confirmacao.is.null,status_confirmacao.in.(pendente,confirmado)')
         .order('horario_agendado', { ascending: false, nullsFirst: false })
         .order('ordem_fila', { ascending: true, nullsFirst: false });
 
+      // Compatibilidade com bancos onde a migration ainda não foi aplicada.
+      // Se nem a coluna de confirmação existir, buscar sem os campos novos nem filtro.
+      if (err) {
+        const fallback = await supabase
+          .from('atendimentos')
+          .select(`
+            id, cliente_id, procedimento_id, modo, status, status_confirmacao,
+            horario_agendado, ordem_fila, motivo_cancelamento, token_acesso,
+            criado_em, duracao_trabalhada_seg, pausado_desde,
+            clientes!cliente_id ( nome, sobrenome, whatsapp ),
+            procedimentos!procedimento_id ( nome, duracao_estimada_min )
+          `)
+          .order('horario_agendado', { ascending: false, nullsFirst: false })
+          .order('ordem_fila', { ascending: true, nullsFirst: false });
+        if (fallback.error) {
+          const legacy = await supabase
+            .from('atendimentos')
+            .select(`id, cliente_id, procedimento_id, modo, status, horario_agendado,
+              ordem_fila, motivo_cancelamento, token_acesso, criado_em,
+              duracao_trabalhada_seg, pausado_desde,
+              clientes!cliente_id ( nome, sobrenome, whatsapp ),
+              procedimentos!procedimento_id ( nome, duracao_estimada_min )`)
+            .order('horario_agendado', { ascending: false, nullsFirst: false })
+            .order('ordem_fila', { ascending: true, nullsFirst: false });
+          data = legacy.data as typeof data;
+          err = legacy.error;
+        } else {
+          data = fallback.data as typeof data;
+          err = null;
+        }
+      }
+
       if (err) throw err;
 
-      const lista = (data || []) as unknown as AtendimentoListItem[];
+      const rows = (data || []) as unknown as (AtendimentoListItem & { procedimento_ids?: string[] | null })[];
+      const idsSolicitados = [...new Set(rows.flatMap((atendimento) =>
+        Array.isArray(atendimento.procedimento_ids) && atendimento.procedimento_ids.length
+          ? atendimento.procedimento_ids
+          : [atendimento.procedimento_id]
+      ).filter(Boolean))];
+      const { data: procedimentosAtendimentos, error: erroProcedimentosAtendimentos } = idsSolicitados.length
+        ? await supabase
+            .from('procedimentos')
+            .select('id, nome, duracao_estimada_min')
+            .in('id', idsSolicitados)
+        : { data: [], error: null };
 
+      if (erroProcedimentosAtendimentos) throw erroProcedimentosAtendimentos;
+
+      const procedimentosPorId = new Map(
+        (procedimentosAtendimentos || []).map((procedimento) => [procedimento.id, procedimento])
+      );
+      const lista = rows.map((d) => {
+        const idsAtendimento = Array.isArray(d.procedimento_ids) && d.procedimento_ids.length
+          ? d.procedimento_ids
+          : [d.procedimento_id];
+        const multi = idsAtendimento
+          .map((id: string) => procedimentosPorId.get(id))
+          .filter((procedimento): procedimento is NonNullable<typeof procedimento> => Boolean(procedimento));
+        if (multi.length === 0 && d.procedimentos) {
+          multi.push({
+            id: d.procedimento_id,
+            nome: d.procedimentos.nome,
+            duracao_estimada_min: d.procedimentos.duracao_estimada_min,
+          });
+        }
+        return { ...d, procedimentos_multi: multi } as unknown as AtendimentoListItem;
+      });
       setAtendimentos(lista);
 
       const calcInputs = lista.map((d) => ({
@@ -205,6 +299,10 @@ export default function AtendimentosPage() {
                 d.procedimentos.duracao_estimada_min || 0,
             }
           : undefined,
+        procedimento_duracao_total_min: d.procedimentos_multi?.reduce(
+          (total, procedimento) => total + (procedimento.duracao_estimada_min || 0),
+          0
+        ),
         duracao_trabalhada_seg: d.duracao_trabalhada_seg || 0,
         pausado_desde: d.pausado_desde || null,
       }));
@@ -215,8 +313,8 @@ export default function AtendimentosPage() {
       setError(null);
     } catch (err) {
       setError(
-        err instanceof Error
-          ? err.message
+        err instanceof Error || (err && typeof err === 'object' && 'message' in err)
+          ? String((err as { message: unknown }).message)
           : 'Erro ao carregar atendimentos'
       );
     }
@@ -570,10 +668,14 @@ const horario = at.horario_agendado
 
 const link = `${window.location.origin}/acompanhar/${at.token_acesso}`;
 
+const procedimentosTexto = (at.procedimentos_multi && at.procedimentos_multi.length > 0)
+  ? at.procedimentos_multi.map((p) => p.nome).join(', ')
+  : (at.procedimentos?.nome || 'Procedimento não informado');
+
 const mensagem = encodeURIComponent(
   `Olá ${at.clientes?.nome}! Tudo bem?\n\n` +
   `Seu atendimento no *Salão da Inacia* está confirmado.\n\n` +
-  `Procedimento: ${at.procedimentos?.nome}\n` +
+  `Procedimentos: ${procedimentosTexto}\n` +
   `Data: ${data}\n` +
   `Horário: ${horario}\n\n` +
   `Você pode acompanhar seu atendimento por este link:\n` +
@@ -607,8 +709,15 @@ const mensagem = encodeURIComponent(
       return;
     }
 
-    if (!formData.procedimento_id) {
-      setError('Selecione um procedimento.');
+    const procedimentosSelecionados = formData.procedimento_ids.length
+      ? formData.procedimento_ids
+      : formData.procedimento_id ? [formData.procedimento_id] : [];
+    if (procedimentosSelecionados.length === 0) {
+      setError('Selecione pelo menos um procedimento.');
+      return;
+    }
+    if (procedimentosSelecionados.length > 2) {
+      setError('Selecione no máximo dois procedimentos.');
       return;
     }
 
@@ -671,7 +780,8 @@ const mensagem = encodeURIComponent(
 
         const payload: any = {
           cliente_id: clienteId,
-          procedimento_id: formData.procedimento_id,
+          procedimento_id: procedimentosSelecionados[0],
+          procedimento_ids: procedimentosSelecionados,
           modo: formData.modo,
         };
 
@@ -695,9 +805,11 @@ const mensagem = encodeURIComponent(
       } else {
         const payload: any = {
           cliente_id: clienteId,
-          procedimento_id: formData.procedimento_id,
+          procedimento_id: procedimentosSelecionados[0],
+          procedimento_ids: procedimentosSelecionados,
           modo: formData.modo,
           status: 'aguardando',
+          status_confirmacao: 'confirmado',
          token_acesso: gerarToken(),
         };
 
@@ -739,6 +851,7 @@ const mensagem = encodeURIComponent(
       setFormData({
         cliente_id: '',
         procedimento_id: '',
+        procedimento_ids: [],
         modo: 'agendamento',
         ordem_fila: 1,
       });
@@ -765,6 +878,7 @@ const mensagem = encodeURIComponent(
     setFormData({
       cliente_id: at.cliente_id,
       procedimento_id: at.procedimento_id,
+      procedimento_ids: at.procedimento_ids?.length ? at.procedimento_ids : [at.procedimento_id],
       modo: at.modo,
       ordem_fila: at.ordem_fila || 1,
     });
@@ -798,6 +912,7 @@ const mensagem = encodeURIComponent(
     setFormData({
       cliente_id: '',
       procedimento_id: '',
+      procedimento_ids: [],
       modo: 'agendamento',
       ordem_fila: 1,
     });
@@ -1014,23 +1129,36 @@ const mensagem = encodeURIComponent(
                         const masked = mascaraWhatsApp(e.target.value);
                         setErroWhatsapp(false);
                         setNovoCliente({ ...novoCliente, whatsapp: masked });
-                      }} maxLength={15} className={erroWhatsapp ? 'min-h-12 w-full min-w-0 rounded-xl border-2 border-red-400 bg-red-50 px-4 py-3 text-base text-zinc-900 placeholder:text-zinc-400 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500' : campoClass} placeholder="(87) 9 9845-4566" aria-invalid={erroWhatsapp} />
+                      }} maxLength={16} className={erroWhatsapp ? 'min-h-12 w-full min-w-0 rounded-xl border-2 border-red-400 bg-red-50 px-4 py-3 text-base text-zinc-900 placeholder:text-zinc-400 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500' : campoClass} placeholder="(87) 9 9845-4566" aria-invalid={erroWhatsapp} />
                     </div>
                   </div>
                 )}
               </div>
               <div className="min-w-0">
-                <label htmlFor="procedimento_id" className="mb-1.5 block text-sm font-medium text-zinc-700">Procedimento *</label>
-                <select
-                  id="procedimento_id"
-                  value={formData.procedimento_id}
-                  onChange={(e) => setFormData({ ...formData, procedimento_id: e.target.value })}
-                  className={campoClass}
-                  required
-                >
-                  <option value="">Selecione o procedimento</option>
-                  {procedimentos.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
-                </select>
+                  <fieldset className="min-w-0">
+                    <legend className="mb-1.5 text-sm font-medium text-zinc-700">Procedimentos * (selecione até 2)</legend>
+                    <div className="space-y-2">
+                      {procedimentos.map((p) => {
+                        const selecionado = (formData.procedimento_ids.length ? formData.procedimento_ids : formData.procedimento_id ? [formData.procedimento_id] : []).includes(p.id);
+                        return (
+                          <label key={p.id} className="flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-800">
+                            <input
+                              type="checkbox"
+                              checked={selecionado}
+                              disabled={!selecionado && formData.procedimento_ids.length >= 2}
+                              onChange={() => {
+                                const atual = formData.procedimento_ids.length ? formData.procedimento_ids : formData.procedimento_id ? [formData.procedimento_id] : [];
+                                const ids = selecionado ? atual.filter((id) => id !== p.id) : [...atual, p.id];
+                                setFormData({ ...formData, procedimento_id: ids[0] || '', procedimento_ids: ids });
+                              }}
+                              className="h-4 w-4 accent-zinc-900"
+                            />
+                            <span>{p.nome}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </fieldset>
               </div>
               <fieldset className="min-w-0 sm:col-span-2">
                 <legend className="mb-2 text-sm font-medium text-zinc-700">Forma de atendimento *</legend>
@@ -1082,10 +1210,23 @@ const mensagem = encodeURIComponent(
                     <GradeHorario
                       opcoes={(() => {
                         try {
-                          const proc = procedimentos.find(p => p.id === formData.procedimento_id);
-                          const dur = proc && typeof (proc as any).duracao_estimada_min === 'number' ? (proc as any).duracao_estimada_min : 30;
-                          const ocupados = atendimentos.filter(a => a.horario_agendado && a.horario_agendado.substring(0,10) === dataAgendamento).map(a => ({ horario_agendado: a.horario_agendado, procedimentos: { duracao_estimada_min: 30 } }));
-                          return calcularGradeHorario(dataAgendamento || new Date().toISOString().split('T')[0], dur, [], ocupados as any);
+                          const idsSelecionados = formData.procedimento_ids.length
+                            ? formData.procedimento_ids
+                            : formData.procedimento_id ? [formData.procedimento_id] : [];
+                          const dur = idsSelecionados.reduce((total, id) => {
+                            const procedimento = procedimentos.find((item) => item.id === id);
+                            return total + (procedimento?.duracao_estimada_min || 0);
+                          }, 0) || 30;
+                          const ocupados = atendimentos
+                            .filter(a => a.horario_agendado && a.horario_agendado.substring(0,10) === dataAgendamento)
+                            .map(a => ({
+                              horario_agendado: a.horario_agendado,
+                              procedimento_duracao_total_min: a.procedimentos_multi?.reduce(
+                                (total, item) => total + (item.duracao_estimada_min || 0),
+                                0
+                              ) || a.procedimentos?.duracao_estimada_min || 30,
+                            }));
+                          return calcularGradeHorario(dataAgendamento || new Date().toISOString().split('T')[0], dur, [], ocupados as Parameters<typeof calcularGradeHorario>[3]);
                         } catch { return []; }
                       })()}
                       valor={horaAgendamento}
@@ -1121,21 +1262,21 @@ const mensagem = encodeURIComponent(
 
         <div className="mb-4 flex items-center justify-between gap-3">
           <div className="flex flex-wrap gap-2">{["hoje","semana","finalizados"].map((t) => (<button key={t} type="button" onClick={() => setFiltroTab(t as any)} className={`rounded-xl px-3 py-2 text-xs font-semibold transition ${t === filtroTab ? "bg-zinc-900 text-white" : "bg-white border border-zinc-200 text-zinc-700"}`} aria-pressed={t === filtroTab}>{t === "hoje" ? "Hoje" : t === "semana" ? "Esta semana" : "Finalizados"}</button>))}</div>
-          {!loading && <span className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-sm font-semibold tabular-nums text-zinc-600">{atendimentos.length}</span>}
+          {!loading && <span className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-sm font-semibold tabular-nums text-zinc-600">{atendimentosDaAba.length}</span>}
         </div>
         {loading ? (
           <div role="status" className="rounded-2xl border border-zinc-200 bg-white p-8 text-center shadow-sm">
             <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-zinc-200 border-t-amber-400" />
             <p className="text-sm text-zinc-500">Carregando atendimentos...</p>
           </div>
-        ) : atendimentos.length === 0 ? (
+        ) : atendimentosDaAba.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-zinc-300 bg-white px-6 py-10 text-center">
             <p className="font-semibold text-zinc-900">Nenhum atendimento cadastrado</p>
             <p className="mt-2 text-sm text-zinc-500">Os atendimentos confirmados aparecem aqui.</p>
           </div>
         ) : (
           <div className="grid min-w-0 items-start gap-4 lg:grid-cols-2">
-            {atendimentos.map((at) => {
+            {atendimentosDaAba.map((at) => {
               const previsao = previsoes[at.id];
               const processando = processingId === at.id;
               const horario = at.horario_agendado ? new Date(at.horario_agendado) : null;
@@ -1166,11 +1307,29 @@ const mensagem = encodeURIComponent(
                   </div>
                   <div className="p-4 sm:p-5">
                     <h3 className="break-words text-lg font-bold tracking-tight text-zinc-900">{at.clientes?.nome} {at.clientes?.sobrenome}</h3>
-                    <p className="mt-1 break-words text-sm text-zinc-600">{at.procedimentos?.nome}</p>
+                    {at.procedimentos_multi && at.procedimentos_multi.length > 0 ? (
+                      <div className="mt-1">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Procedimentos</p>
+                        <ul className="mt-1 list-inside space-y-0.5">
+                          {at.procedimentos_multi.map((p) => (
+                            <li key={p.id} className="break-words text-sm text-zinc-600">
+                              • {p.nome}
+                              {p.duracao_estimada_min != null && <span className="text-zinc-400"> — {p.duracao_estimada_min} min</span>}
+                            </li>
+                          ))}
+                        </ul>
+                        {(() => {
+                          const total = at.procedimentos_multi.reduce((s, p) => s + (p.duracao_estimada_min || 0), 0);
+                          return total > 0 ? <p className="mt-1 text-xs font-semibold text-zinc-500">Duração total: {total} minutos</p> : null;
+                        })()}
+                      </div>
+                    ) : (
+                      <p className="mt-1 break-words text-sm text-zinc-600">{at.procedimentos?.nome || 'Procedimento não informado'}</p>
+                    )}
                     {at.clientes?.whatsapp && <p className="mt-2 break-words text-sm font-medium text-zinc-700">WhatsApp: {at.clientes.whatsapp}</p>}
                     <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
                       <span className="rounded-lg bg-zinc-100 px-2.5 py-1 font-medium text-zinc-600">{at.modo === 'agendamento' ? 'Agendamento' : 'Fila'}</span>
-                      {at.procedimentos?.duracao_estimada_min != null && <span className="text-zinc-500">{at.procedimentos.duracao_estimada_min} min de duração</span>}
+                      {at.procedimentos?.duracao_estimada_min != null && !(at.procedimentos_multi && at.procedimentos_multi.length > 0) && <span className="text-zinc-500">{at.procedimentos.duracao_estimada_min} min de duração</span>}
                     </div>
 
                     {(previsao?.inicio_previsto || previsao?.fim_previsto || (previsao?.minutos_restantes != null && previsao.minutos_restantes > 0)) && (

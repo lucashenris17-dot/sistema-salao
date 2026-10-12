@@ -249,10 +249,18 @@ export default function SolicitacoesPage() {
                     <div className="my-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
                       <div className="min-w-0 flex-1">
                         <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Procedimento</p>
-                        <p className="mt-1 break-words font-semibold">{item.procedimento_nome}</p>
+                        {item.procedimentos?.length ? (
+                          <ul className="mt-1 space-y-1 font-semibold">
+                            {item.procedimentos.map((procedimento) => (
+                              <li key={procedimento.id}>• {procedimento.nome}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="mt-1 break-words font-semibold">{item.procedimento_nome}</p>
+                        )}
                       </div>
                       <span className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-zinc-600 ring-1 ring-zinc-200">
-                        {item.procedimento_duracao_min} min
+                        {item.procedimento_duracao_min} min{item.procedimentos && item.procedimentos.length > 1 ? ' total' : ''}
                       </span>
                     </div>
 

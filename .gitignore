@@ -43,3 +43,4 @@ next-env.d.ts
 build-summary.html
 
 supabase/.temp/
+.opencode

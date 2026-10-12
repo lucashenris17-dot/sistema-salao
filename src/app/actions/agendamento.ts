@@ -49,8 +49,14 @@ export async function criarSolicitacaoAgendamento(
     if (!input.whatsapp?.trim()) {
       return { sucesso: false, erro: 'WhatsApp é obrigatório' };
     }
-    if (!input.procedimento_id) {
+    const ids = input.procedimento_ids && input.procedimento_ids.length > 0
+      ? input.procedimento_ids
+      : (input.procedimento_id ? [input.procedimento_id] : []);
+    if (ids.length === 0) {
       return { sucesso: false, erro: 'Procedimento é obrigatório' };
+    }
+    if (ids.length > 2) {
+      return { sucesso: false, erro: 'Selecione no máximo dois procedimentos' };
     }
     if (!input.horario_agendado) {
       return { sucesso: false, erro: 'Horário agendado é obrigatório' };
@@ -124,7 +130,8 @@ export async function criarSolicitacaoAgendamento(
       .insert([
         {
           cliente_id: clienteId,
-          procedimento_id: input.procedimento_id,
+          procedimento_id: ids[0], // principal (retrocompat)
+          procedimento_ids: ids, // múltiplos (PARTE 2)
           modo: 'agendamento',
           status: 'aguardando',
           status_confirmacao: 'pendente',
@@ -140,6 +147,22 @@ export async function criarSolicitacaoAgendamento(
         sucesso: false,
         erro: erroAtendimento?.message || 'Erro ao criar solicitação de agendamento',
       };
+    }
+
+    // O array na tabela principal é a fonte compatível e obrigatória.
+    // A tabela de junção é mantida para consumidores futuros, mas pode ainda
+    // não existir em ambientes que não aplicaram a migration.
+    if (ids.length > 1) {
+      const { error: erroJunção } = await supabase
+        .from('atendimento_procedimentos')
+        .insert(ids.map((procedimentoId) => ({
+          atendimento_id: novoAtendimento.id,
+          procedimento_id: procedimentoId,
+        })));
+
+      if (erroJunção && !/atendimento_procedimentos|schema cache/i.test(erroJunção.message)) {
+        console.error('Não foi possível preencher atendimento_procedimentos:', erroJunção.message);
+      }
     }
 
     // 6. Retornar sucesso + token

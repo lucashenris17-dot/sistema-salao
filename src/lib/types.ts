@@ -138,7 +138,8 @@ export interface SolicitacaoAgendamentoInput {
   whatsapp: string; // Obrigatório no formulário público
 
   // Dados do agendamento
-  procedimento_id: string;
+  procedimento_ids?: string[]; // Múltiplos procedimentos (PARTE 2)
+  procedimento_id?: string; // Retrocompatibilidade
   horario_agendado: string; // ISO string (timestamptz)
 }
 
@@ -205,6 +206,7 @@ export interface SolicitacaoPendente {
   cliente_whatsapp: string;
   procedimento_nome: string;
   procedimento_duracao_min: number;
+  procedimentos?: { id: string; nome: string; duracao_estimada_min: number }[];
   horario_solicitado: string;
   criado_em: string;
 }
