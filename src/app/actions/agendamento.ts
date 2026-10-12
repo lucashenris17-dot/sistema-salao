@@ -7,6 +7,7 @@ import {
   SolicitacaoAgendamentoResponse,
 } from '@/lib/types';
 import { gerarTokenAcompanhamento } from '@/lib/tokens';
+import { calcularGradeHorario, gerarGradeHorarios } from '@/lib/horarios';
 
 /**
  * Cria cliente Supabase no servidor
@@ -58,12 +59,12 @@ export async function criarSolicitacaoAgendamento(
     if (ids.length > 2) {
       return { sucesso: false, erro: 'Selecione no máximo dois procedimentos' };
     }
-    if (!input.horario_agendado) {
+    if (!input.horario_agendado || typeof input.horario_agendado !== 'string') {
       return { sucesso: false, erro: 'Horário agendado é obrigatório' };
     }
 
     const dataHorario = new Date(input.horario_agendado);
-    if (isNaN(dataHorario.getTime())) {
+    if (Number.isNaN(dataHorario.getTime()) || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(input.horario_agendado)) {
       return { sucesso: false, erro: 'Horário agendado inválido' };
     }
 
@@ -77,6 +78,77 @@ export async function criarSolicitacaoAgendamento(
     }
 
     const supabase = await createSupabaseClient();
+    const idsUnicos = [...new Set(ids)];
+    if (idsUnicos.length !== ids.length || ids.some((id) => typeof id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id))) {
+      return { sucesso: false, erro: 'Seleção de procedimentos inválida' };
+    }
+
+    const { data: procedimentos, error: erroProcedimentos } = await supabase
+      .from('procedimentos').select('id, duracao_estimada_min, ativo').in('id', idsUnicos);
+    if (erroProcedimentos) {
+      console.error('Falha ao validar procedimentos do agendamento:', erroProcedimentos.message);
+      return { sucesso: false, erro: 'Não foi possível validar os procedimentos. Tente novamente.' };
+    }
+    if (!procedimentos || procedimentos.length !== idsUnicos.length || procedimentos.some((p) => !p.ativo)) {
+      return { sucesso: false, erro: 'Um ou mais procedimentos não estão disponíveis' };
+    }
+    const duracaoMin = procedimentos.reduce((total, p) => total + p.duracao_estimada_min, 0);
+    if (!Number.isSafeInteger(duracaoMin) || duracaoMin <= 0) {
+      return { sucesso: false, erro: 'Duração dos procedimentos inválida' };
+    }
+
+    const dataPartes = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit',
+    }).formatToParts(dataHorario);
+    const parte = (tipo: Intl.DateTimeFormatPartTypes) => dataPartes.find((p) => p.type === tipo)?.value ?? '';
+    const dataSalao = `${parte('year')}-${parte('month')}-${parte('day')}`;
+    const horaPartes = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+    }).formatToParts(dataHorario);
+    const horaSalao = `${horaPartes.find((p) => p.type === 'hour')?.value}:${horaPartes.find((p) => p.type === 'minute')?.value}`;
+    if (!gerarGradeHorarios().includes(horaSalao)) {
+      return { sucesso: false, erro: 'Horário solicitado fora dos horários de atendimento' };
+    }
+    const [horaInicio, minutoInicio] = horaSalao.split(':').map(Number);
+    if (horaInicio * 60 + minutoInicio + duracaoMin > 19 * 60) {
+      return { sucesso: false, erro: 'A duração do procedimento ultrapassa o horário de atendimento' };
+    }
+
+    const [bloqueiosResult, atendimentosResult] = await Promise.all([
+      supabase.from('bloqueios_agenda').select('tipo, dias_semana, data_inicio, data_fim, hora_inicio, hora_fim, inicio, fim'),
+      supabase.from('atendimentos').select('horario_agendado, procedimento_id, procedimento_ids, status, status_confirmacao').eq('modo', 'agendamento').not('horario_agendado', 'is', null).in('status', ['aguardando', 'em_andamento', 'pausado']),
+    ]);
+    if (bloqueiosResult.error || atendimentosResult.error) {
+      console.error('Falha ao consultar disponibilidade:', bloqueiosResult.error?.message, atendimentosResult.error?.message);
+      return { sucesso: false, erro: 'Não foi possível verificar a disponibilidade. Tente novamente.' };
+    }
+
+    const atendimentos = (atendimentosResult.data || []) as unknown as {
+      horario_agendado: string | null;
+      procedimento_id: string | null;
+      procedimento_ids: string[] | null;
+      status_confirmacao: string | null;
+    }[];
+    const idsOcupados = [...new Set(atendimentos.flatMap((a) => a.procedimento_ids || (a.procedimento_id ? [a.procedimento_id] : [])))];
+    const { data: catalogoOcupados, error: erroCatalogo } = idsOcupados.length
+      ? await supabase.from('procedimentos').select('id, duracao_estimada_min').in('id', idsOcupados)
+      : { data: [], error: null };
+    if (erroCatalogo) {
+      console.error('Falha ao consultar duração de atendimentos existentes:', erroCatalogo.message);
+      return { sucesso: false, erro: 'Não foi possível verificar a disponibilidade. Tente novamente.' };
+    }
+    const ocupados = atendimentos.filter((a) => a.status_confirmacao !== 'recusado' && a.horario_agendado).map((a) => ({
+      horario_agendado: a.horario_agendado,
+      procedimento_duracao_total_min: a.procedimento_ids?.length
+        ? a.procedimento_ids.reduce((soma, id) => soma + (catalogoOcupados?.find((p) => p.id === id)?.duracao_estimada_min || 0), 0) || undefined
+        : undefined,
+    }));
+    const slot = calcularGradeHorario(dataSalao, duracaoMin, bloqueiosResult.data || [], ocupados)
+      .find((opcao) => opcao.horaStr === horaSalao);
+    if (!slot?.disponivel) {
+      return { sucesso: false, erro: 'Este horário não está mais disponível. Escolha outro horário.' };
+    }
+    const horarioSolicitado = dataHorario.toISOString();
     // Normalizar WhatsApp (remover todos os não-dígitos)
     const whatsappNormalizado = input.whatsapp.replace(/\D/g, '');
     const whatsappLimpo = whatsappNormalizado.trim();
@@ -92,6 +164,7 @@ export async function criarSolicitacaoAgendamento(
       .maybeSingle();
 
     if (erroBuscaCliente) {
+      console.error('Falha ao localizar cliente para solicitação:', erroBuscaCliente.message);
       return { sucesso: false, erro: 'Erro ao verificar cadastro do cliente' };
     }
 
@@ -112,9 +185,10 @@ export async function criarSolicitacaoAgendamento(
         .single();
 
       if (erroCriarCliente || !novoCliente) {
+        if (erroCriarCliente) console.error('Falha ao cadastrar cliente:', erroCriarCliente.message);
         return {
           sucesso: false,
-          erro: erroCriarCliente?.message || 'Erro ao cadastrar cliente',
+          erro: 'Não foi possível cadastrar os dados do cliente. Tente novamente.',
         };
       }
 
@@ -135,7 +209,7 @@ export async function criarSolicitacaoAgendamento(
           modo: 'agendamento',
           status: 'aguardando',
           status_confirmacao: 'pendente',
-          horario_agendado: input.horario_agendado,
+          horario_agendado: horarioSolicitado,
           token_acesso: tokenAcesso,
         },
       ])
@@ -143,9 +217,10 @@ export async function criarSolicitacaoAgendamento(
       .single();
 
     if (erroAtendimento || !novoAtendimento) {
+      if (erroAtendimento) console.error('Falha ao inserir solicitação:', erroAtendimento.message);
       return {
         sucesso: false,
-        erro: erroAtendimento?.message || 'Erro ao criar solicitação de agendamento',
+        erro: 'Não foi possível criar a solicitação de agendamento. Tente novamente.',
       };
     }
 
@@ -172,12 +247,10 @@ export async function criarSolicitacaoAgendamento(
       token_acesso: tokenAcesso,
     };
   } catch (error) {
+    console.error('Erro inesperado ao criar solicitação de agendamento:', error);
     return {
       sucesso: false,
-      erro:
-        error instanceof Error
-          ? error.message
-          : 'Erro ao processar solicitação de agendamento',
+      erro: 'Erro ao processar solicitação de agendamento. Tente novamente.',
     };
   }
 }

@@ -1,3 +1,14 @@
+## Sessão: 2026-12-10 (Validação autoritativa da solicitação de agendamento)
+
+- **Problema encontrado:** a action pública não revalidava os procedimentos, duração, bloqueios, limites do expediente ou conflitos antes de inserir a solicitação; também podia expor mensagens internas do Supabase ao cliente.
+- **Correção:** `src/app/actions/agendamento.ts` agora valida IDs UUID únicos, busca procedimentos ativos e suas durações oficiais, soma duração de múltiplos procedimentos, valida ISO/data passada/grade e limite até 19:00, carrega bloqueios e atendimentos ativos e invoca `calcularGradeHorario` no servidor antes do insert. Erros de infraestrutura são registrados no servidor e as respostas ao cliente são amigáveis.
+- **Arquivos alterados:** `src/app/actions/agendamento.ts`, `docs/ia/05-ULTIMA-SESSAO.md`.
+- **Impacto:** mantém aprovação pendente e fluxo/layout atual; solicitações inválidas, bloqueadas ou sobrepostas são recusadas com a mesma regra de horários do cliente.
+- **Concorrência:** a consulta e o insert continuam sendo operações Supabase separadas. Sem RPC/transação/constraint no banco não é possível garantir ausência de corrida simultânea. Nenhuma migration ou alteração do banco foi feita, conforme solicitado; garantia atômica requer autorização para propor/aplicar mudança de banco.
+- **Testes:** `npx tsc --noEmit` passou; `npm run build` passou. `git diff --check` passou. Cenários contra o banco hospedado não puderam ser exercitados nesta execução; dependem de ambiente Supabase acessível. Build emite apenas o aviso preexistente de depreciação de `middleware`.
+
+---
+
 ## Sessão: 2026-11-10 (Borda final inclusiva dos bloqueios)
 
 - Separada a regra de disponibilidade dos bloqueios da regra entre atendimentos em `src/lib/horarios.ts`: horários que começam exatamente no fim do bloqueio agora ficam bloqueados (`inicioMin <= b.fim`).
