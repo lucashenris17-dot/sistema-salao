@@ -33,9 +33,7 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  console.log("USUARIO NO MIDDLEWARE:", user?.email);
-
-  // Protege rotas /admin/* exceto /admin/procedimentos se não autenticado
+  // Protege todas as rotas /admin/* — sem login, redireciona para /login
   if (request.nextUrl.pathname.startsWith("/admin")) {
     if (!user) {
       const loginUrl = new URL("/login", request.url);

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
 import { BloqueioAgenda, Procedimento, mascaraWhatsApp, validarWhatsApp } from '@/lib/types';
 import { criarSolicitacaoAgendamento } from '@/app/actions/agendamento';
-import { calcularGradeHorario } from '@/lib/horarios';
+import { calcularGradeHorario, type BloqueioGrade, type OcupadoGrade } from '@/lib/horarios';
 import GradeHorario from '@/components/grade-horarios';
 
 type BloqueioItem = Pick<
@@ -45,11 +45,42 @@ export default function AgendarPage() {
   const [error, setError] = useState<string | null>(null);
 
   // Reconhecimento inteligente do cliente (estabilizado)
-  const [clienteReconhecido, setClienteReconhecido] = useState(false);
+  const [, setClienteReconhecido] = useState(false);
   const [nomeClienteReconhecido, setNomeClienteReconhecido] = useState('');
   const [ultimoAtendimento, setUltimoAtendimento] = useState<{ nome: string; criado_em: string; procedimento_id: string } | null>(null);
   const [etapa1Sub, setEtapa1Sub] = useState<'whatsapp' | 'cadastro' | 'reconhecido'>('whatsapp');
   const reconhecendoRef = useRef(false);
+
+  // Gerar os próximos 15 dias para os cards de seleção de data
+  const diasDisponiveis = useMemo(() => {
+    const dias = [];
+    const hoje = new Date();
+    const diasSemana = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
+    const meses = [
+      'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun',
+      'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez',
+    ];
+
+    for (let i = 0; i < 15; i++) {
+      const dataObj = new Date(hoje);
+      dataObj.setDate(hoje.getDate() + i);
+
+      const ano = dataObj.getFullYear();
+      const mes = String(dataObj.getMonth() + 1).padStart(2, '0');
+      const diaNum = String(dataObj.getDate()).padStart(2, '0');
+      const isoData = `${ano}-${mes}-${diaNum}`;
+
+      dias.push({
+        iso: isoData,
+        diaSemana: diasSemana[dataObj.getDay()],
+        diaNumero: diaNum,
+        mesNome: meses[dataObj.getMonth()],
+        dataObj,
+      });
+    }
+
+    return dias;
+  }, []);
 
   // Formulário
   const [formData, setFormData] = useState({
@@ -57,7 +88,7 @@ export default function AgendarPage() {
     sobrenome: '',
     whatsapp: '',
     procedimento_ids: [] as string[],
-    data: '', // YYYY-MM-DD
+    data: diasDisponiveis[0]?.iso || '', // YYYY-MM-DD (primeiro dia por padrão)
     hora: '', // HH:mm
   });
 
@@ -133,57 +164,6 @@ export default function AgendarPage() {
     return procedimentosSelecionados.reduce((sum, p) => sum + (p.duracao_estimada_min || 0), 0);
   }, [procedimentosSelecionados]);
 
-  // Gerar os próximos 14 dias para os cards de seleção de data
-  const diasDisponiveis = useMemo(() => {
-    const dias = [];
-    const hoje = new Date();
-    const diasSemana = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
-    const meses = [
-      'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun',
-      'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez',
-    ];
-
-    for (let i = 0; i < 15; i++) {
-      const dataObj = new Date(hoje);
-      dataObj.setDate(hoje.getDate() + i);
-
-      const ano = dataObj.getFullYear();
-      const mes = String(dataObj.getMonth() + 1).padStart(2, '0');
-      const diaNum = String(dataObj.getDate()).padStart(2, '0');
-      const isoData = `${ano}-${mes}-${diaNum}`;
-
-      dias.push({
-        iso: isoData,
-        diaSemana: diasSemana[dataObj.getDay()],
-        diaNumero: diaNum,
-        mesNome: meses[dataObj.getMonth()],
-        dataObj,
-      });
-    }
-
-    return dias;
-  }, []);
-
-  // Selecionar primeiro dia por padrão quando os dias carregarem se ainda não houver data
-  useEffect(() => {
-    if (!formData.data && diasDisponiveis.length > 0) {
-      setFormData((prev) => ({ ...prev, data: diasDisponiveis[0].iso }));
-    }
-  }, [diasDisponiveis, formData.data]);
-
-  // Lista de horários padrão (das 08:00 às 19:00 de 30 em 30 min)
-  const horariosBase = useMemo(() => {
-    const lista = [];
-    for (let h = 8; h <= 19; h++) {
-      const horaStr = String(h).padStart(2, '0');
-      lista.push(`${horaStr}:00`);
-      if (h < 19) {
-        lista.push(`${horaStr}:30`);
-      }
-    }
-    return lista;
-  }, []);
-
   const todosHorarios = useMemo(() => {
     if (!formData.data) return [];
     const duracaoMin = duracaoTotal || 30;
@@ -191,8 +171,8 @@ export default function AgendarPage() {
     const opcoes = calcularGradeHorario(
       formData.data,
       duracaoMin,
-      bloqueios as any[],
-      atendimentosOcupados as any[],
+      bloqueios as BloqueioGrade[],
+      atendimentosOcupados as OcupadoGrade[],
     );
     return opcoes;
   }, [formData.data, duracaoTotal, bloqueios, atendimentosOcupados]);
@@ -414,11 +394,12 @@ export default function AgendarPage() {
                           (async () => {
                             try {
                               const { data: c } = await supabase.from('clientes').select('id,nome,sobrenome').eq('whatsapp', limpo).maybeSingle();
-                            if (c) {
-                              const nomeCompleto = `${(c as any).nome || ''} ${(c as any).sobrenome || ''}`.trim();
+                            const cliente: { nome?: string | null; sobrenome?: string | null } | null = c ?? null;
+                            if (cliente) {
+                              const nomeCompleto = `${cliente.nome || ''} ${cliente.sobrenome || ''}`.trim();
                               setClienteReconhecido(true);
                               setNomeClienteReconhecido(nomeCompleto);
-                              setFormData((prev) => ({ ...prev, nome: (c as any).nome || prev.nome, sobrenome: (c as any).sobrenome || prev.sobrenome }));
+                              setFormData((prev) => ({ ...prev, nome: cliente.nome || prev.nome, sobrenome: cliente.sobrenome || prev.sobrenome }));
                               // Buscar último atimento finalizado
                               const { data: hist } = await supabase.from('atendimentos').select('criado_em, procedimento_id').eq('status', 'finalizado').order('criado_em', { ascending: false }).limit(1);
                               const primeiro = (hist && hist[0]) || null;
@@ -552,7 +533,7 @@ export default function AgendarPage() {
                     Escolha o procedimento
                   </h2>
                   <p className="text-sm text-zinc-500 mt-1">
-                    Toque no card para selecionar o serviço desejado.
+                    Toque nos cards para selecionar (até 2 serviços).
                   </p>
                 </div>
 
@@ -569,6 +550,8 @@ export default function AgendarPage() {
                           key={proc.id}
                           type="button"
                           onClick={() => {
+                            // Limite de 2 procedimentos (mesma regra do servidor)
+                            if (!isSelected && formData.procedimento_ids.length >= 2) return;
                             const novo = isSelected
                               ? formData.procedimento_ids.filter((id) => id !== proc.id)
                               : [...formData.procedimento_ids, proc.id];

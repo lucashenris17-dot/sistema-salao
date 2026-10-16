@@ -187,7 +187,10 @@ export function calcularGradeHorario(
   return grade.map((horaStr) => {
     const inicioMin = horarioParaMinutos(horaStr);
     const fimMin = inicioMin + duracaoMin;
-    const foraExpediente = inicioMin < 8 * 60 || inicioMin > 19 * 60;
+    // Fora do expediente: antes das 08:00 ou terminando depois das 19:00.
+    // (O servidor rejeita agendamentos que ultrapassem 19:00, então a grade
+    // já marca esses horários como indisponíveis em vez de dar erro depois.)
+    const foraExpediente = inicioMin < 8 * 60 || fimMin > 19 * 60;
     // O início do bloqueio é exclusivo para permitir que um atendimento termine
     // nesse limite; o fim é inclusivo, pois um atendimento não pode começar
     // exatamente no horário final do bloqueio.
