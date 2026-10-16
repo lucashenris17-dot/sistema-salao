@@ -79,7 +79,7 @@ export default function AtendimentosPage() {
     whatsapp: '',
   });
   const [erroWhatsapp, setErroWhatsapp] = useState(false);
-  const [filtroTab, setFiltroTab] = useState<'hoje' | 'semana' | 'finalizados'>('hoje');
+  const [filtroTab, setFiltroTab] = useState<'hoje' | 'semana' | 'proxima' | 'finalizados'>('hoje');
   const [dataAgendamento, setDataAgendamento] = useState('');
   const [horaAgendamento, setHoraAgendamento] = useState('');
 
@@ -93,11 +93,19 @@ export default function AtendimentosPage() {
     const diaSemana = new Date(Date.UTC(ano, mes - 1, dia)).getUTCDay();
     const fimSemana = new Date(Date.UTC(ano, mes - 1, dia + 6 - diaSemana));
     const fim = `${fimSemana.getUTCFullYear()}-${String(fimSemana.getUTCMonth() + 1).padStart(2, '0')}-${String(fimSemana.getUTCDate()).padStart(2, '0')}`;
+    // Próxima semana: do dia seguinte ao fim desta semana até 7 dias depois
+    // (segunda a domingo da semana que vem).
+    const inicioProximaSemana = new Date(Date.UTC(fimSemana.getUTCFullYear(), fimSemana.getUTCMonth(), fimSemana.getUTCDate() + 1));
+    const fimProximaSemana = new Date(Date.UTC(fimSemana.getUTCFullYear(), fimSemana.getUTCMonth(), fimSemana.getUTCDate() + 7));
+    const inicioProxima = `${inicioProximaSemana.getUTCFullYear()}-${String(inicioProximaSemana.getUTCMonth() + 1).padStart(2, '0')}-${String(inicioProximaSemana.getUTCDate()).padStart(2, '0')}`;
+    const fimProxima = `${fimProximaSemana.getUTCFullYear()}-${String(fimProximaSemana.getUTCMonth() + 1).padStart(2, '0')}-${String(fimProximaSemana.getUTCDate()).padStart(2, '0')}`;
     if (filtroTab === 'finalizados') return atendimentos.filter((at) => at.status === 'finalizado');
     return atendimentos.filter((at) => {
       if (!at.horario_agendado || at.status === 'finalizado' || at.status === 'cancelado' || at.status === 'no_show') return false;
       const data = dataNoFuso(at.horario_agendado);
-      return filtroTab === 'hoje' ? data === hoje : data >= hoje && data <= fim;
+      if (filtroTab === 'hoje') return data === hoje;
+      if (filtroTab === 'proxima') return data >= inicioProxima && data <= fimProxima;
+      return data >= hoje && data <= fim;
     });
   }, [atendimentos, filtroTab]);
 
@@ -1261,7 +1269,7 @@ const mensagem = encodeURIComponent(
         )}
 
         <div className="mb-4 flex items-center justify-between gap-3">
-          <div className="flex flex-wrap gap-2">{["hoje","semana","finalizados"].map((t) => (<button key={t} type="button" onClick={() => setFiltroTab(t as any)} className={`rounded-xl px-3 py-2 text-xs font-semibold transition ${t === filtroTab ? "bg-zinc-900 text-white" : "bg-white border border-zinc-200 text-zinc-700"}`} aria-pressed={t === filtroTab}>{t === "hoje" ? "Hoje" : t === "semana" ? "Esta semana" : "Finalizados"}</button>))}</div>
+          <div className="flex flex-wrap gap-2">{["hoje","semana","proxima","finalizados"].map((t) => (<button key={t} type="button" onClick={() => setFiltroTab(t as any)} className={`rounded-xl px-3 py-2 text-xs font-semibold transition ${t === filtroTab ? "bg-zinc-900 text-white" : "bg-white border border-zinc-200 text-zinc-700"}`} aria-pressed={t === filtroTab}>{t === "hoje" ? "Hoje" : t === "semana" ? "Esta semana" : t === "proxima" ? "Próxima semana" : "Finalizados"}</button>))}</div>
           {!loading && <span className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-sm font-semibold tabular-nums text-zinc-600">{atendimentosDaAba.length}</span>}
         </div>
         {loading ? (
