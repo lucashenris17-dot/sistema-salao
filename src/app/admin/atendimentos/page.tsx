@@ -1226,7 +1226,9 @@ const mensagem = encodeURIComponent(
                             return total + (procedimento?.duracao_estimada_min || 0);
                           }, 0) || 30;
                           const ocupados = atendimentos
-                            .filter(a => a.horario_agendado && a.horario_agendado.substring(0,10) === dataAgendamento)
+                            .filter(a => a.horario_agendado && a.horario_agendado.substring(0,10) === dataAgendamento
+                              && a.status !== 'cancelado' && a.status !== 'no_show'
+                              && a.status_confirmacao !== 'recusado')
                             .map(a => ({
                               horario_agendado: a.horario_agendado,
                               procedimento_duracao_total_min: a.procedimentos_multi?.reduce(
