@@ -1,6 +1,7 @@
 # Auditoria de Segurança — Sistema Salão
 
 **Data da análise:** 10/12/2026  
+**Atualização pós-remediação:** 16/10/2026 (ver seção "Atualização — 16/10/2026" abaixo)  
 **Escopo:** revisão estática do repositório e execução de `npm audit`. Nenhum código de aplicação, dependência ou banco foi alterado nesta auditoria; este documento é o único arquivo criado.  
 **Limitações:** não foram fornecidas credenciais Supabase, acesso ao projeto hospedado, ambiente de produção ou configuração do provedor. Portanto, a auditoria avalia as migrations versionadas e o código, não o estado efetivamente aplicado no banco, secrets configurados no hosting, logs de deploy, branch protections nem comportamento dinâmico em produção.
 
@@ -161,3 +162,48 @@ O audit registra falhas altas em `brace-expansion` (dependência de desenvolvime
 # O sistema está pronto para publicação?
 
 **NÃO.** Há risco alto/crítico de dependências, permissões excessivas para usuários autenticados, ausência de autorização explícita nas Server Actions administrativas, exposição de dados pessoais pela superfície pública e ausência de validação autoritativa/atômica da agenda. Além disso, as policies efetivas do Supabase não puderam ser verificadas sem acesso ao projeto. Publicação deve aguardar remediação e validação no ambiente real.
+
+---
+
+# Atualização — 16/10/2026 (pós-remediação e verificação em produção)
+
+Entre a análise original e esta data, as remediações abaixo foram implementadas, aplicadas no banco de produção e verificadas. O status de cada achado foi reavaliado.
+
+## Evidências de verificação (16/10/2026)
+
+- Migration `supabase/migrations/20261017000000_seguranca_publicacao.sql` executada no Supabase de produção: `Success. No rows returned`.
+- Query de verificação em `pg_policies` (tabelas `atendimentos`, `clientes`): restam apenas `Admins gerenciam atendimentos`, `anon_atendimentos_insert_pendente`, `Admins gerenciam clientes`, `anon_clientes_insert`. As policies anônimas de leitura ampla **não existem mais**.
+- Cadastro público desligado no dashboard (Authentication → Sign In / Providers → "Allow new users to sign up" = OFF, confirmado por screenshot).
+- Apenas **1 conta de usuário** existe no Authentication (a administradora).
+- Código sincronizado no PC de produção (`git pull`: `3fc79cc` → `72e5b4f`); `npm run build` passa limpo.
+- Testes de fluxo em `npm run dev`: agendamento público gera token; `/acompanhar/[token]` com token válido exibe os dados; token inválido/truncado exibe "Não encontrado"; login no `/admin` aprova/recusa solicitações normalmente.
+
+## Reavaliação dos achados
+
+| Achado | Status em 16/10/2026 |
+|---|---|
+| **C1** — 9 vulnerabilidades `npm audit` (1 crítica, 8 altas) | ⏳ **PENDENTE** — sem alteração. Continua sendo o principal bloqueador antes da publicação. Exige atualização controlada das dependências (com changelog, `npm run build` e reteste dos fluxos). Nunca usar `npm audit fix --force`. |
+| **A1** — `authenticated` com acesso integral, sem papel administrativo | ✅ **RISCO ACEITO + MITIGADO** — decisão de produto: sem sistema de cargos; qualquer `authenticated` = a única administradora (Inácia). Mitigação verificada: cadastro público **desligado** e apenas 1 conta existente, de modo que nenhuma conta nova pode ser criada por terceiros. Risco residual: comprometimento da única conta — aceito para o MVP. |
+| **A2** — Server Actions administrativas sem autorização própria | ✅ **CORRIGIDO (parcial)** — `src/app/actions/solicitacoes.ts` e `src/app/actions/bloqueios.ts` agora chamam `auth.getUser()` e recusam execução sem usuário autenticado (commit `72e5b4f`). Sem checagem de papel, por decisão (ver A1). |
+| **A3** — Criação pública sem validação server-side | ✅ **CORRIGIDO** — `src/app/actions/agendamento.ts` valida no servidor: procedimento existe e está ativo, duração lida do banco, bloqueios e conflitos de horário (commit `3fc79cc`). A grade do `/agendar` também não oferece mais horários que terminariam após as 19:00, e a UI limita a 2 procedimentos como o servidor. Risco residual aceito: sem transação/constraint contra dois cliques simultâneos no mesmo horário (salão pequeno + aprovação manual). |
+| **A4** — Exposição de dados pessoais pela RPC pública e tracking | ✅ **CORRIGIDO** — as policies anônimas de SELECT amplo (`anon_atendimentos_select_proprio_token`, `anon_clientes_select_basico`) foram **removidas do banco** (verificado via `pg_policies`); `/acompanhar/[token]/page.tsx` não faz mais nenhuma consulta direta a tabelas (zero `supabase.from` na página) e usa somente RPCs; nova `fn_fila_publica(p_token)` exige token válido e retorna apenas dados mínimos da fila (sem `id`, `cliente_id`, `procedimento_ids`, WhatsApp); `fn_buscar_atendimento_publico` ganhou `status_confirmacao` para a página não precisar de SELECT direto. Risco residual inerente ao desenho: o token continua sendo bearer na URL (aceito) e não há rate limit nas RPCs. |
+| **A5** — RLS de tabelas posteriores não demonstrado | ⚠️ **PARCIALMENTE TRATADO** — a leitura anônima de bloqueios (`anon_bloqueios_select`) foi mantida deliberadamente: a grade pública do `/agendar` precisa dos horários indisponíveis. Recomenda-se confirmar RLS/grants de `atendimento_procedimentos` no banco antes da publicação, caso a tabela de junção seja utilizada. |
+| **A6** — Dados e erros excessivos na superfície pública | ✅ **CORRIGIDO (parcial)** — acompanhamento não consulta mais tabelas diretamente; a fila pública é mínima. |
+| **M1** — Identidade autenticada equivale a administrador | ✅ **ACEITO** — por decisão de produto, mitigado pelo cadastro público desligado (ver A1). |
+| **M3** — Validação de entrada e limites de abuso | ⏳ **PENDENTE** — sem rate limit/CAPTCHA nas ações públicas. Recomendado como endurecimento futuro, não bloqueador para o MVP. |
+| **M4** — Persistência do cliente e consistência concorrente | ✅ **RISCO ACEITO** — mesma aceitação de A3 (concorrência simultânea). |
+| **M5** — Log de email no middleware | ✅ **CORRIGIDO** — `console.log` removido de `src/middleware.ts` (commit `4449110`). |
+| **M6** — Conteúdo interno versionado | ✅ **CORRIGIDO (parcial)** — arquivos com nomes de caminho Windows quebrados (incluindo cópias de `MEMORY.md`) foram removidos do repositório (commits `83e6bb9`, `a8f90af`); varredura do histórico não encontrou chave/segredo real. `docs/ia/*` permanece versionado por decisão (documentação do projeto). |
+
+## Correções de código também incluídas (commits `4449110` e `72e5b4f`)
+
+- `src/app/layout.tsx`: corrigido uso de `LayoutProps` inexistente (o `npm run build` estava quebrado); metadata e idioma (`pt-BR`) ajustados.
+- Removida a rota antiga `src/app/acompanhar/[token/]/` (versão duplicada com consultas diretas inseguras).
+
+## Veredito atualizado — 16/10/2026
+
+**CONDICIONALMENTE PRONTO.** Todos os bloqueadores de segurança de dados foram remediados e verificados no banco de produção: não há mais leitura anônima ampla de clientes/atendimentos, o acompanhamento público usa somente RPCs mínimas com token válido, as actions administrativas exigem autenticação, o cadastro público está desligado e existe apenas uma conta. O que ainda impede a publicação:
+
+1. **Atualização controlada das dependências** (C1): 9 vulnerabilidades do `npm audit` (1 crítica, 8 altas, maioria no Next.js 16.3.4). Atualizar com changelog, rodar `npm run build` e retestar os fluxos. Nunca `npm audit fix --force`.
+2. **Variáveis no deploy** (quando publicar na Vercel): somente `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_ANON_KEY`. Nunca expor `service_role` no frontend.
+3. Recomendado (não bloqueador): confirmar RLS/grants de `atendimento_procedimentos` no banco; avaliar rate limiting nas ações públicas futuramente.
