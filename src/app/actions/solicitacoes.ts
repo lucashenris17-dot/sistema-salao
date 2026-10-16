@@ -29,10 +29,31 @@ async function createSupabaseClient() {
 }
 
 /**
+ * Garante que há um usuário autenticado antes de executar uma ação
+ * administrativa. O middleware protege as páginas /admin, mas as Server
+ * Actions podem ser invocadas diretamente — esta verificação é a
+ * barreira no servidor. Retorna null se autorizado, ou a resposta de
+ * erro caso contrário.
+ */
+async function exigirAutenticado(): Promise<AcaoResponse<never> | null> {
+  const supabase = await createSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { sucesso: false, erro: 'Não autorizado. Faça login como administradora.' };
+  }
+  return null;
+}
+
+/**
  * Lista todas as solicitações de agendamento pendentes de aprovação (status_confirmacao = 'pendente')
  */
 export async function listarSolicitacoesPendentes(): Promise<AcaoResponse<SolicitacaoPendente[]>> {
   try {
+    const bloqueado = await exigirAutenticado();
+    if (bloqueado) return bloqueado;
+
     const supabase = await createSupabaseClient();
 
     const { data, error } = await supabase
@@ -117,6 +138,9 @@ export async function aprovarSolicitacao(id: string): Promise<AcaoResponse<void>
       };
     }
 
+    const bloqueado = await exigirAutenticado();
+    if (bloqueado) return bloqueado;
+
     const supabase = await createSupabaseClient();
 
     const { error } = await supabase
@@ -156,6 +180,9 @@ export async function recusarSolicitacao(id: string): Promise<AcaoResponse<void>
         erro: 'ID da solicitação é obrigatório',
       };
     }
+
+    const bloqueado = await exigirAutenticado();
+    if (bloqueado) return bloqueado;
 
     const supabase = await createSupabaseClient();
 

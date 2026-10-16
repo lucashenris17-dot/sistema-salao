@@ -30,10 +30,31 @@ async function createSupabaseClient() {
 }
 
 /**
+ * Garante que há um usuário autenticado antes de executar uma ação
+ * administrativa. O middleware protege as páginas /admin, mas as Server
+ * Actions podem ser invocadas diretamente — esta verificação é a
+ * barreira no servidor. Retorna null se autorizado, ou a resposta de
+ * erro caso contrário.
+ */
+async function exigirAutenticado(): Promise<AcaoResponse<never> | null> {
+  const supabase = await createSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { sucesso: false, erro: 'Não autorizado. Faça login como administradora.' };
+  }
+  return null;
+}
+
+/**
  * Lista todos os bloqueios de agenda
  */
 export async function listarBloqueios(): Promise<AcaoResponse<BloqueioAgenda[]>> {
   try {
+    const bloqueado = await exigirAutenticado();
+    if (bloqueado) return bloqueado;
+
     const supabase = await createSupabaseClient();
 
     const { data, error } = await supabase
@@ -78,6 +99,9 @@ export async function criarBloqueio(
   input: BloqueioRegraInput
 ): Promise<AcaoResponse<BloqueioAgenda>> {
   try {
+    const bloqueado = await exigirAutenticado();
+    if (bloqueado) return bloqueado;
+
     if (!input.descricao || !input.descricao.trim()) {
       return { sucesso: false, erro: 'Motivo é obrigatório' };
     }
@@ -247,6 +271,8 @@ export async function atualizarBloqueio(
 ): Promise<AcaoResponse<BloqueioAgenda>> {
   try {
     if (!id) return { sucesso: false, erro: 'ID do bloqueio é obrigatório' };
+    const bloqueado = await exigirAutenticado();
+    if (bloqueado) return bloqueado;
     if (!input.descricao?.trim()) return { sucesso: false, erro: 'Motivo é obrigatório' };
     const tipo = input.tipo || 'especifico';
     if (!input.hora_inicio || !input.hora_fim || input.hora_fim <= input.hora_inicio) {
@@ -320,6 +346,9 @@ export async function excluirBloqueio(id: string): Promise<AcaoResponse<void>> {
         erro: 'ID do bloqueio é obrigatório',
       };
     }
+
+    const bloqueado = await exigirAutenticado();
+    if (bloqueado) return bloqueado;
 
     const supabase = await createSupabaseClient();
 

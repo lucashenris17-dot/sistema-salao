@@ -119,83 +119,37 @@ export default function AcompanharPage({ params }: { params: Promise<{ token: st
 
         setAtendimento(atendimentoData);
 
-        // Busca status_confirmacao diretamente (não retornado pela RPC)
-        const { data: confirmData } = await supabase
-          .from('atendimentos')
-          .select('status_confirmacao')
-          .eq('token_acesso', token)
-          .single();
-        setStatusConfirmacao((confirmData as any)?.status_confirmacao ?? null);
+        // status_confirmacao agora vem na própria RPC (sem SELECT direto)
+        setStatusConfirmacao(resposta.status_confirmacao ?? null);
 
+        // Fila mínima via RPC (sem identificadores: sem id, cliente_id,
+        // procedimento_ids ou WhatsApp). Exige token válido.
         const { data: filaData } = await supabase
-  .from('atendimentos')
-.select(`
-    id,
-    cliente_id,
-    procedimento_id,
-    procedimento_ids,
-    modo,
-    status,
-    horario_agendado,
-    ordem_fila,
-    criado_em,
-    duracao_trabalhada_seg,
-    pausado_desde,
-    procedimentos!procedimento_id (
-      duracao_estimada_min
-    )
-  `)
-.in('status', ['aguardando', 'em_andamento', 'pausado'])
-.order('criado_em', { ascending: true });
+          .rpc('fn_fila_publica', { p_token: token });
 
-const procedimentoIds = Array.from(new Set(
-  (filaData || []).flatMap((f: any) =>
-    Array.isArray(f.procedimento_ids) && f.procedimento_ids.length > 0
-      ? f.procedimento_ids
-      : f.procedimento_id
-        ? [f.procedimento_id]
-        : []
-  )
-));
-const { data: procedimentosData } = procedimentoIds.length > 0
-  ? await supabase
-      .from('procedimentos')
-      .select('id, duracao_estimada_min')
-      .in('id', procedimentoIds)
-  : { data: [] };
-const duracoesPorProcedimento = new Map(
-  (procedimentosData || []).map((p: any) => [p.id, p.duracao_estimada_min || 0])
-);
+        // IDs sintéticos: a RPC não expõe identificadores reais.
+        // A linha do próprio cliente é localizada via eh_meu.
+        const calcInputs = (filaData || []).map((f: any, indice: number) => ({
+          id: `fila-${indice}`,
+          eh_meu: Boolean(f.eh_meu),
+          modo: f.modo,
+          status: f.status,
+          cliente_id: '',
+          procedimento_id: '',
+          horario_agendado: f.horario_agendado,
+          ordem_fila: f.ordem_fila,
+          criado_em: f.criado_em,
+          procedimento: {
+            duracao_estimada_min: f.duracao_estimada_min || 0,
+          },
+          duracao_trabalhada_seg: f.duracao_trabalhada_seg,
+          pausado_desde: f.pausado_desde,
+        }));
 
-const calcInputs = (filaData || []).map((f: any) => ({
-  id: f.id,
-  modo: f.modo,
-  status: f.status,
-  cliente_id: f.cliente_id || '',
-  procedimento_id: f.procedimento_id || '',
-  horario_agendado: f.horario_agendado,
-  ordem_fila: f.ordem_fila,
-  criado_em: f.criado_em,
-  procedimento: {
-    duracao_estimada_min: (
-      Array.isArray(f.procedimento_ids) && f.procedimento_ids.length > 0
-        ? f.procedimento_ids
-        : f.procedimento_id
-          ? [f.procedimento_id]
-          : []
-    ).reduce(
-      (total: number, procedimentoId: string) =>
-        total + (duracoesPorProcedimento.get(procedimentoId) || 0),
-      0
-    ) || f.procedimentos?.duracao_estimada_min || 0
-  },
-  duracao_trabalhada_seg: f.duracao_trabalhada_seg,
-  pausado_desde: f.pausado_desde,
-}));
+        const preds = calcularPrevisao(calcInputs);
+        const meuInput = calcInputs.find((c: any) => c.eh_meu);
 
-const preds = calcularPrevisao(calcInputs);
-
-setPrevisao(preds[atendimentoData.id] || {});
+        setPrevisao((meuInput && preds[meuInput.id]) || {});
       } catch (e) {
         setErro('Erro ao carregar');
       }
@@ -216,9 +170,7 @@ setPrevisao(preds[atendimentoData.id] || {});
       carregar();
     }
   )
-  .subscribe((status) => {
-    console.log('REALTIME STATUS:', status);
-  });  
+  .subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
