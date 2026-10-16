@@ -1,1 +1,0 @@
-- [conflito-bloqueios-atendimentos](memory\conflito-bloqueios-atendimentos.md) — Regra de conflito bloqueios × atendimentos implementada (aviso, WhatsApp, Manter/Cancelar, sem auto-cancelar).
